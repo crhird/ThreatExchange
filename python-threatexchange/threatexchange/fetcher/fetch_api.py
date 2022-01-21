@@ -9,7 +9,7 @@ The fetcher is the component that talks to external APIs to get and put signals
 
 import typing as t
 
-from threatexchange.fetcher.meta_threatexchange.collab_config import CollaborationConfig
+from threatexchange.fetcher.collab_config import CollaborationConfigBase
 from threatexchange.signal_type.signal_base import SignalType
 from threatexchange.fetcher import fetch_state as state
 
@@ -57,14 +57,19 @@ class SignalExchangeAPI:
         return cls.__name__
 
     @classmethod
-    def get_checkpoint_cls(cls) -> state.FetchCheckpointBase:
+    def get_checkpoint_cls(cls) -> t.Type[state.FetchCheckpointBase]:
         """Returns the dataclass used to control checkpoint for this API"""
-        raise NotImplementedError
+        return state.FetchCheckpointBase  # Default = no checkpoints
 
     @classmethod
-    def get_record_cls(cls) -> state.FetchedStateBase:
+    def get_record_cls(cls) -> t.Type[state.FetchedSignalMetadata]:
         """Returns the dataclass used to store records for this API"""
-        raise NotImplementedError
+        return state.FetchedSignalMetadata  # Default = no metadata
+
+    @classmethod
+    def get_config_class(cls) -> CollaborationConfigBase:
+        """Returns the dataclass used to store records for this API"""
+        return CollaborationConfigBase  # Default = Only 1 collab possible
 
     def resolve_owner(self, id: int) -> str:
         """
@@ -89,7 +94,11 @@ class SignalExchangeAPI:
         return -1
 
     def fetch_once(
-        self, collab: CollaborationConfig, checkpoint: t.Any
+        self,
+        collab: CollaborationConfigBase,
+        # None if fetching for the first time,
+        # otherwise the previous FetchDelta returned
+        checkpoint: t.Optional[state.FetchCheckpointBase],
     ) -> state.FetchDeltaBase:
         """
         Call out to external resources, pulling down one "batch" of content.
@@ -103,7 +112,7 @@ class SignalExchangeAPI:
         raise NotImplementedError
 
     def report_seen(
-        self, s_type: SignalType, signal: str, metadata: state.FetchedSignalDataBase
+        self, s_type: SignalType, signal: str, metadata: state.FetchedStateStoreBase
     ) -> None:
         """
         Report that you observed this signal.
@@ -115,7 +124,7 @@ class SignalExchangeAPI:
 
     def report_opinion(
         self,
-        collab: CollaborationConfig,
+        collab: CollaborationConfigBase,
         s_type: t.Type[SignalType],
         signal: str,
         opinion: state.SignalOpinion,
@@ -132,7 +141,7 @@ class SignalExchangeAPI:
         self,
         s_type: t.Type[SignalType],
         signal: str,
-        metadata: state.FetchedSignalDataBase,
+        metadata: state.FetchedSignalMetadata,
     ) -> None:
         """
         Report that a previously seen signal was a true positive.
@@ -146,7 +155,7 @@ class SignalExchangeAPI:
         self,
         s_type: t.Type[SignalType],
         signal: str,
-        metadata: state.FetchedSignalDataBase,
+        metadata: state.FetchedSignalMetadata,
     ) -> None:
         """
         Report that a previously seen signal is a false positive.

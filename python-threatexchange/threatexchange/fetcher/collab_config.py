@@ -8,8 +8,6 @@ Settings used to inform a fetcher what to fetch
 from dataclasses import dataclass
 import typing as t
 
-from threatexchange.fetcher.fetch_api import SignalExchangeAPI
-
 
 @dataclass
 class CollaborationConfigBase:
@@ -24,8 +22,7 @@ class CollaborationConfigBase:
     """
 
     name: str
-    enabled: bool  # Whether to fetch from this or not
-    fetcher_name: str  # Fetch_api.SignalExchangeAPI.name()
+    enabled: bool  # Whether to match this or not
 
 
 class CollaborationConfigStoreBase:
@@ -37,10 +34,4 @@ class CollaborationConfigStoreBase:
 
     def get(self, name: str):
         """Get a specific collab config by name"""
-        return next(c for c in self.get_all() if c.name == name, None)
-
-    def get_for_api(self, api: SignalExchangeAPI) -> t.List[CollaborationConfigBase]:
-        """
-        Get all the configs for a specific API, resolved to the correct type
-        """
-        return [c for c in self.get_all() if c.fetcher_name == api.get_name()]
+        return next((c for c in self.get_all() if c.name == name), None)

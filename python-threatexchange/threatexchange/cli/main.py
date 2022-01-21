@@ -12,6 +12,7 @@ between stages, and a state file to store hashes.
 """
 
 import argparse
+from functools import lru_cache
 import inspect
 import os
 import os.path
@@ -20,9 +21,24 @@ import re
 import sys
 import typing as t
 
+from threatexchange import meta
+
+from threatexchange.fetcher.simple.static_sample import StaticSampleSignalExchangeAPI
+
+from threatexchange.fetcher.collab_config import CollaborationConfigStoreBase
 from threatexchange.fetcher.meta_threatexchange import descriptor
+
 from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
 from threatexchange.fetcher.meta_threatexchange.collab_config import CollaborationConfig
+from threatexchange.content_type import photo, video, text, url
+from threatexchange.signal_type import (
+    pdq,
+    md5,
+    raw_text,
+    url as url_signal,
+    url_md5,
+    trend_query,
+)
 from threatexchange.cli.cli_state import Dataset
 from threatexchange.cli import (
     command_base as base,
@@ -87,24 +103,15 @@ def execute_command(namespace) -> None:
         return
     command_cls = namespace.command_cls
     try:
-        # Init API
-        api = ThreatExchangeAPI(
-            get_app_token(namespace.app_token),
-            endpoint_override=namespace.fb_threatexchange_endpoint,
-        )
-        # Init state library (needs to be refactored)
-        descriptor.ThreatDescriptor.MY_APP_ID = api.api_token.partition("|")[0]
-        # Init collab config
-        cfg = init_config_file(namespace.config)
-        # "Init" dataset
-        dataset = Dataset(cfg, namespace.state_dir)
+        # Init everything
+        settings = _get_settings(namespace)
         command_argspec = inspect.getfullargspec(command_cls.__init__)
         arg_names = set(command_argspec[0])
         # Since we didn't import click, use hard-to-debug magic to init the command
         command = command_cls(
             **{k: v for k, v in namespace.__dict__.items() if k in arg_names}
         )
-        command.execute(api, dataset)
+        command.execute(settings)
     except base.CommandError as ce:
         print(ce, file=sys.stderr)
         sys.exit(ce.returncode)
@@ -178,8 +185,45 @@ def init_config_file(cli_provided: t.IO = None) -> CollaborationConfig:
         return CollaborationConfig.load(f)
 
 
-def get_meta_settings():
-    
+def _get_settings(namespace: t.Any):
+    """
+    Configure the behavior and functionality.
+    """
+
+    # Init API
+    # api = ThreatExchangeAPI(
+    #     get_app_token(namespace.app_token),
+    #     endpoint_override=namespace.fb_threatexchange_endpoint,
+    # )
+    # Init state library (needs to be refactored)
+    # descriptor.ThreatDescriptor.MY_APP_ID = api.api_token.partition("|")[0]
+    # # Init collab config
+    # cfg = init_config_file(namespace.config)
+    # # "Init" dataset
+    # dataset = Dataset(cfg, namespace.state_dir)
+
+    signals = meta.SignalTypeMapping(
+        [photo.PhotoContent, video.VideoContent, url.URL, text.TextContent],
+        [
+            pdq.PdqSignal,
+            md5.VideoMD5Signal,
+            raw_text.RawTextSignal,
+            url_signal.URLSignal,
+            url_md5.UrlMD5Signal,
+            trend_query.TrendQuerySignal,
+        ],
+    )
+    fetchers = meta.FetcherMapping(
+        [
+            meta.FetcherSyncer(
+                StaticSampleSignalExchangeAPI(),
+                None,
+            ),
+        ]
+    )
+    collabs = CollaborationConfigStoreBase()
+
+    return meta.FunctionalityMapping(signals, fetchers, collabs)
 
 
 def _verify_directory(raw: str) -> pathlib.Path:

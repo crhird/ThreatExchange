@@ -88,7 +88,7 @@ class HashCommand(command_base.Command):
             else:
                 yield pathlib.Path(token)
 
-    def execute(self, api: ThreatExchangeAPI, dataset: Dataset) -> None:
+    def execute(self, _settings) -> None:
 
         all_signal_types = [
             s

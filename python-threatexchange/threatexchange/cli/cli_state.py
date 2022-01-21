@@ -14,6 +14,8 @@ import pathlib
 import typing as t
 
 from threatexchange.fetcher.meta_threatexchange import collab_config
+from threatexchange.fetcher.simple import state as simple_state
+from threatexchange.fetcher.fetch_api import SignalExchangeAPI
 from threatexchange.content_type import meta
 from threatexchange.signal_type import signal_base
 from threatexchange.signal_type import index
@@ -129,3 +131,17 @@ class Dataset:
             return None
         with path.open("rb") as fin:
             return signal_type.get_index_cls().deserialize(fin)
+
+
+class CliSimpleState(simple_state.SimpleFetchedStateStore):
+    def __init__(self, api_cls: SignalExchangeAPI, dir: pathlib.Path) -> None:
+        super().__init__(api_cls)
+        self.dir = dir
+
+    def _read_state_as_delta(
+        self,
+    ) -> simple_state.SimpleFetchDelta:
+        raise NotImplementedError
+
+    def _write_state_as_delta(self, delta: simple_state.SimpleFetchDelta) -> None:
+        raise NotImplementedError

@@ -8,11 +8,10 @@ import typing as t
 
 from threatexchange.fetcher.meta_threatexchange import threat_updates
 from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
-from threatexchange.fetcher.meta_threatexchange.descriptor import SimpleDescriptorRollup
-from . import command_base
-from . import dataset_cmd
-from .cli_state import Dataset
-from .dataset.simple_serialization import CliIndicatorSerialization
+from threatexchange.cli import command_base
+from threatexchange.cli import dataset_cmd
+from threatexchange.cli.cli_state import Dataset
+from threatexchange.cli.dataset.simple_serialization import CliIndicatorSerialization
 
 
 class FetchCommand(command_base.Command):

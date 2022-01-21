@@ -10,11 +10,9 @@ to fill up.
 
 import argparse
 import sys
-import typing as t
 
 from threatexchange import common
-from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
-from .cli_state import Dataset
+from threatexchange import meta
 
 
 class CommandError(Exception):
@@ -52,7 +50,7 @@ class Command:
         Program the command subparser for __init__
 
         Your argument names should match the argument names in __init__.
-        Be careful of collisions with the top level arg names from all_in_one.py
+        Be careful of collisions with the top level arg names from main.py
         """
         pass
 
@@ -86,5 +84,5 @@ class Command:
         """Convenience accessor to stderr"""
         print(*args, file=sys.stderr, **kwargs)
 
-    def execute(self, api: ThreatExchangeAPI, dataset: Dataset) -> None:
+    def execute(self, settings: meta.FunctionalityMapping) -> None:
         raise NotImplementedError

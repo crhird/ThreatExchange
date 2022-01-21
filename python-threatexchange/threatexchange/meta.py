@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from threatexchange.content_type.content_base import ContentType
 from threatexchange.signal_type.signal_base import SignalType
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
-from threatexchange.fetcher.fetch_state import FetchedStateBase
+from threatexchange.fetcher.fetch_state import FetchedStateStoreBase
 from threatexchange.fetcher.collab_config import CollaborationConfigStoreBase
 
 
@@ -24,7 +24,7 @@ class SignalTypeMapping:
     def __init__(
         self,
         content_types: t.List[t.Type[ContentType]],
-        signal_types: t.List[t.Type[SignalType]],
+        signal_types: t.Optional[t.List[t.Type[SignalType]]] = None,
     ):
         _validate_content_and_signal(content_types, signal_types)
 
@@ -46,7 +46,7 @@ class SignalTypeMapping:
 
 class FetcherSyncer(t.NamedTuple):
     api: SignalExchangeAPI
-    store: FetchedStateBase
+    store: FetchedStateStoreBase
 
 
 class FetcherMapping:
@@ -69,7 +69,7 @@ class FunctionalityMapping:
     collabs: CollaborationConfigStoreBase
 
 
-def _validate_signal_apis(self, apis: t.Iterable[SignalExchangeAPI]):
+def _validate_signal_apis(apis: t.Iterable[SignalExchangeAPI]):
     names = set()
     for a in apis:
         name = a.get_name()
@@ -87,7 +87,7 @@ def _validate_content_types(content_types: t.List[t.Type[ContentType]]) -> None:
         names.add(name)
 
 
-def _validate_signal_types(self, signal_types: t.List[t.Type[SignalType]]):
+def _validate_signal_types(signal_types: t.List[t.Type[SignalType]]):
     names = set()
     for s in signal_types:
         name = s.get_name()
@@ -96,7 +96,6 @@ def _validate_signal_types(self, signal_types: t.List[t.Type[SignalType]]):
 
 
 def _validate_content_and_signal(
-    self,
     content_types: t.List[t.Type[ContentType]],
     signal_types: t.List[t.Type[SignalType]],
 ) -> None:

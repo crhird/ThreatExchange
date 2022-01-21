@@ -2,24 +2,32 @@
 
 
 from dataclasses import dataclass, field
-from this import d
 import typing as t
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
 
 from threatexchange.signal_type.signal_base import SignalType
 from threatexchange.fetcher import fetch_state
+from threatexchange.fetcher.collab_config import CollaborationConfigBase
 
 
 @dataclass
-class SimpleFetchedSignalData(fetch_state.FetchedSignalDataBase):
+class SimpleFetchedSignalData(fetch_state.FetchedSignalMetadata):
     """
     Append + replace opinions by owner ID
 
     If you add any fields, make sure they are merged as well.
     """
 
+    opinions: t.List[fetch_state.SignalOpinion] = field(default_factory=list)
+
+    def get_as_opinions(self) -> t.List[fetch_state.SignalOpinion]:
+        return self.opinions
+
     def merge(self, newer: "SimpleFetchedSignalData") -> None:
         """Assumes apppend, with merge on owner ID"""
+        if not self.opinions or not newer.opinions:
+            return
+
         by_owner = {o.owner_id: o for o in self.opinions}
         self.opinions = [by_owner.get(o.owner_id, o) for o in self.opinions]
 
@@ -33,10 +41,8 @@ class SimpleFetchDelta(fetch_state.FetchDeltaBase):
     deleted if it exists.
     """
 
-    updates: t.Dict[t.Tuple[str, str], t.Optional[SimpleFetchedSignalData]] = field(
-        default_factory=dict
-    )
-    checkpoint: t.Optional[fetch_state.FetchCheckpointBase] = None
+    updates: t.Dict[t.Tuple[str, str], t.Optional[SimpleFetchedSignalData]]
+    checkpoint: fetch_state.FetchCheckpointBase
 
     def merge(self, newer: "SimpleFetchDelta"):
         for k, v in newer.updates.items():
@@ -55,7 +61,7 @@ class SimpleFetchDelta(fetch_state.FetchDeltaBase):
         return self.checkpoint
 
 
-class SimpleFetchedState:
+class SimpleFetchedStateStore(fetch_state.FetchedStateStoreBase):
     """
     Standardizes on merging on (type, indicator), merges in memory.
 
@@ -74,13 +80,16 @@ class SimpleFetchedState:
 
     def _read_state_as_delta(
         self,
+        collab_name: str,
     ) -> SimpleFetchDelta:
         raise NotImplementedError
 
-    def _write_state_as_delta(self, delta: SimpleFetchDelta) -> None:
+    def _write_state_as_delta(self, collab_name: str, delta: SimpleFetchDelta) -> None:
         raise NotImplementedError
 
-    def get_checkpoint(self) -> fetch_state.FetchCheckpointBase:
+    def get_checkpoint(
+        self, collab: CollaborationConfigBase
+    ) -> fetch_state.FetchCheckpointBase:
         return self.in_memory_state.checkpoint
 
     @property
@@ -91,7 +100,7 @@ class SimpleFetchedState:
             self._id_map = None
         return self._state
 
-    def merge(self, delta: SimpleFetchDelta) -> None:
+    def merge(self, collab: CollaborationConfigBase, delta: SimpleFetchDelta) -> None:
         """
         Merge a FetchDeltaBase into the state.
 
@@ -124,7 +133,7 @@ class SimpleFetchedState:
 
     def get_metadata_from_id(
         self, metadata_id: int
-    ) -> t.Optional[fetch_state.FetchedSignalDataBase]:
+    ) -> t.Optional[fetch_state.FetchedSignalMetadata]:
         """
         Fetch the metadata from an ID
         """

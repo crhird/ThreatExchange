@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 import typing as t
 
+from threatexchange.fetcher.collab_config import CollaborationConfigBase
 from threatexchange.signal_type.signal_base import SignalType
 
 
@@ -20,6 +21,22 @@ class FetchCheckpointBase:
     """
     If you need to store checkpoint information, this is the place to do it
     """
+
+    def stale(self) -> bool:
+        """
+        For some APIs, stored state may become invalid if stored too long.
+
+        Return true if the old data should be deleted and fetched from scratch.
+        """
+        return False
+
+    def done(self) -> bool:
+        """
+        Returns true if the API has no more data at this time.
+
+        Probably don't store this, or store it as a timestamp.
+        """
+        return True
 
 
 class SignalOpinionCategory(Enum):
@@ -54,9 +71,13 @@ class SignalOpinion:
     category: SignalOpinionCategory
     tags: t.List[str]
 
+    @classmethod
+    def get_trivial(cls):
+        return cls(0, SignalOpinionCategory.WORTH_INVESTIGATING, [])
+
 
 @dataclass
-class FetchedSignalDataBase:
+class FetchedSignalMetadata:
     """
     Metadata to make decisions on matches and power feedback on the fetch API.
 
@@ -67,18 +88,8 @@ class FetchedSignalDataBase:
     will need to store that here.
     """
 
-    opinions: t.List[SignalOpinion]
-    metadata_id: int = 0  # If your API doesn't support IDs, leave this as 0
-
-    def merge(self, newer: "FetchedStateBase") -> None:
-        """
-        Merge with another state object. This object is always the older state
-
-        The usual reaon this happens is the stored state is being combined
-        with the fetched state. Some APIs might append, while others might
-        replace.
-        """
-        raise NotImplementedError
+    def get_as_opinions(self) -> t.List[SignalOpinion]:
+        return [SignalOpinion.get_trivial()]
 
 
 class FetchDeltaBase:
@@ -100,7 +111,7 @@ class FetchDeltaBase:
 
 # TODO t.Generic[TFetchDeltaBase, TFetchedSignalDataBase, FetchCheckpointBase]
 #      to help keep track of the expected subclasses for an impl
-class FetchedStateBase:
+class FetchedStateStoreBase:
     """
     An interface to previously fetched or persisted state.
 
@@ -116,13 +127,13 @@ class FetchedStateBase:
     since they need to be consistent between instanciation
     """
 
-    def get_checkpoint(self) -> FetchCheckpointBase:
+    def get_checkpoint(self, collab: CollaborationConfigBase) -> FetchCheckpointBase:
         """
         Returns the last checkpoint passed to merge() after a flush()
         """
         raise NotImplementedError
 
-    def merge(self, delta: FetchDeltaBase) -> None:
+    def merge(self, collab: CollaborationConfigBase, delta: FetchDeltaBase) -> None:
         """
         Merge a FetchDeltaBase into the state.
 
@@ -136,6 +147,12 @@ class FetchedStateBase:
         Finish writing the results of previous merges to persistant state.
 
         This should also persist the checkpoint.
+        """
+        raise NotImplementedError
+
+    def clear(self, collab: CollaborationConfigBase) -> None:
+        """
+        Delete all the stored state for this collaboration.
         """
         raise NotImplementedError
 
@@ -153,13 +170,5 @@ class FetchedStateBase:
         TODO this currently implies that you are going to load the entire dataset
         into memory, which once we start getting huge amounts of data, might not make
         sense.
-        """
-        raise NotImplementedError
-
-    def get_metadata_from_id(
-        self, metadata_id: int
-    ) -> t.Optional[FetchedSignalDataBase]:
-        """
-        Fetch the metadata from an ID
         """
         raise NotImplementedError

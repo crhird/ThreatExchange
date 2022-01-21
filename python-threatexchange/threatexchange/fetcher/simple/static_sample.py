@@ -16,16 +16,16 @@ from threatexchange.signal_type.pdq import PdqSignal
 from threatexchange.signal_type.pdq_ocr import PdqOcrSignal
 from threatexchange.signal_type.md5 import VideoMD5Signal
 from threatexchange.signal_type.raw_text import RawTextSignal
+from threatexchange.signal_type.signal_base import SignalType
 from threatexchange.signal_type.url import URLSignal
 from threatexchange.signal_type.trend_query import TrendQuery
 
 from threatexchange.fetcher import fetch_state as state
 from threatexchange.fetcher.collab_config import CollaborationConfigBase
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
+
 from threatexchange.fetcher.simple.state import (
     SimpleFetchDelta,
-    SimpleFetchDeltaWithSyntheticID,
-    TypedSignalWithOpinion,
 )
 
 
@@ -35,8 +35,10 @@ class StaticSampleSignalExchangeAPI(SignalExchangeAPI):
     """
 
     def fetch_once(
-        self, collab: CollaborationConfigBase, _checkpoint: state.TFetchStateCheckpoint
-    ) -> SimpleFetchDeltaWithSyntheticID:
+        self,
+        _collab: CollaborationConfigBase,
+        _checkpoint: t.Optional[state.FetchCheckpointBase],
+    ) -> SimpleFetchDelta:
 
         pdqs = [_signal(PdqSignal, s) for s in _pdq_samples()]
         pdq_ocrs = [_signal(PdqSignal, s) for s in _pdq_orc_samples()]
@@ -45,18 +47,16 @@ class StaticSampleSignalExchangeAPI(SignalExchangeAPI):
         text = [_signal(RawTextSignal, s) for s in _text_samples()]
         trend_query = [_signal(TrendQuery, s) for s in _trend_query_samples()]
 
-        return SimpleFetchDeltaWithSyntheticID(
-            list(itertools.chain((pdqs, pdq_ocrs, vmd5s, urls, text, trend_query))),
+        return SimpleFetchDelta(
+            dict(itertools.chain((pdqs, pdq_ocrs, vmd5s, urls, text, trend_query))),
             state.FetchCheckpointBase(),
         )
 
 
-def _signal(cls, ind: str) -> TypedSignalWithOpinion:
-    return TypedSignalWithOpinion(
-        cls,
-        ind,
-        state.SignalOpinion(0, state.SignalOpinionCategory.WORTH_INVESTIGATING, []),
-    )
+def _signal(
+    sig_cls, ind: str
+) -> t.Tuple[t.Tuple[t.Type[SignalType], str], state.SignalOpinion]:
+    return (sig_cls, ind), state.SignalOpinion.get_trivial()
 
 
 def _vmd5_samples() -> t.List[str]:
