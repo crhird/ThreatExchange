@@ -13,11 +13,7 @@ import warnings
 
 import Levenshtein
 
-from threatexchange.fetcher.meta_threatexchange.descriptor import (
-    SimpleDescriptorRollup,
-    ThreatDescriptor,
-)
-from threatexchange.hashing.pdq_utils import pdq_match
+from threatexchange.hashing.pdq_utils import simple_distance
 from threatexchange import common
 from . import signal_base
 
@@ -34,7 +30,6 @@ class PdqOcrSignal(signal_base.SimpleSignalType, signal_base.FileHasher):
     """
 
     INDICATOR_TYPE = "HASH_PDQ_OCR"
-    TYPE_TAG = "media_type_photo"
 
     # This may need to be updated (TODO make more configurable)
     # Hashes of distance less than or equal to this threshold are considered a 'match'
@@ -49,7 +44,10 @@ class PdqOcrSignal(signal_base.SimpleSignalType, signal_base.FileHasher):
             from ..hashing.ocr_utils import text_from_image_file
         except:
             warnings.warn(
-                "Getting both PDQ hash and text of an image file using OCR requires additional libraries already be installed; install threatexchange with the [pdq_hasher & ocr] extra and see ocr_utils.py",
+                "Getting both PDQ hash and text of an image file using OCR "
+                "requires additional libraries already be installed; "
+                "install threatexchange with the [pdq_hasher & ocr] "
+                "extra and see ocr_utils.py",
                 category=UserWarning,
             )
             return ""
@@ -59,43 +57,36 @@ class PdqOcrSignal(signal_base.SimpleSignalType, signal_base.FileHasher):
 
         return f"{pdq_hash},{ocr_text}"
 
-    def match_hash(self, signal_str: str) -> t.List[signal_base.SignalMatch]:
-        content_pdq_hash, _, content_ocr_text = signal_str.partition(",")
-        if not content_ocr_text:
-            return []
-        matches = []
-        for pdq_hash_plus_ocr, signal_attr in self.state.items():
-            te_pdq_hash, te_ocr_text = pdq_hash_plus_ocr.split(",", maxsplit=1)
-            # PDQ Hash Match
-            if pdq_match(
-                te_pdq_hash,
-                content_pdq_hash,
-                self.PDQ_PLUS_OCR_CONFIDENT_MATCH_THRESHOLD,
-            ):
-                # Check for text match
-                normalized_content_str = common.normalize_string(content_ocr_text)
-                normalized_te_str = common.normalize_string(te_ocr_text)
-                if self._levenshtein_text_match(
-                    normalized_content_str,
-                    normalized_te_str,
-                    self.LEVENSHTEIN_DISTANCE_PERCENT_THRESHOLD,
-                ):
-                    matches.append(
-                        signal_base.SignalMatch(
-                            signal_attr.labels, signal_attr.first_descriptor_id
-                        )
-                    )
-        return matches
+    @classmethod
+    def compare_hash(cls, hash1: str, hash2: str) -> signal_base.HashComparisonResult:
+        pdq_hash_1, _, ocr_text_1 = hash1.partition(",")
+        pdq_hash_2, _, ocr_text_2 = hash2.partition(",")
+        if not all((pdq_hash_1, ocr_text_1, pdq_hash_2, ocr_text_2)):
+            return signal_base.HashComparisonResult.no_match_result(255)
 
-    def _levenshtein_text_match(self, str_a: str, str_b: str, threshold: float) -> bool:
-        """
-        Returns true if strings match within the percent threshold using Levenshtein distance
-        """
-        # TODO find way to reuse similar code in raw_text.py without sacrificing performance.
-        match_threshold = math.floor(len(str_a) * threshold)
-        ldiff = abs(len(str_a) - len(str_b))
-        # Filter out anything that can't possibly match due to len difference
-        if ldiff > match_threshold:
-            return False
-        distance = Levenshtein.distance(str_a, str_b)
-        return distance <= match_threshold
+        dist = simple_distance(pdq_hash_1, pdq_hash_2)
+        match = False
+        if dist <= cls.PDQ_PLUS_OCR_CONFIDENT_MATCH_THRESHOLD:
+            # Check for text match
+            text1 = common.normalize_string(ocr_text_1)
+            text2 = common.normalize_string(ocr_text_2)
+            match = _levenshtein_text_match(
+                text1,
+                text2,
+                cls.LEVENSHTEIN_DISTANCE_PERCENT_THRESHOLD,
+            )
+        return signal_base.HashComparisonResult(match, dist)
+
+
+def _levenshtein_text_match(str_a: str, str_b: str, threshold: float) -> bool:
+    """
+    Returns true if strings match within the percent threshold using Levenshtein distance
+    """
+    # TODO find way to reuse similar code in raw_text.py without sacrificing performance.
+    match_threshold = math.floor(len(str_a) * threshold)
+    ldiff = abs(len(str_a) - len(str_b))
+    # Filter out anything that can't possibly match due to len difference
+    if ldiff > match_threshold:
+        return False
+    distance = Levenshtein.distance(str_a, str_b)
+    return distance <= match_threshold

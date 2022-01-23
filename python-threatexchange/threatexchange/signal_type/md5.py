@@ -12,9 +12,7 @@ import typing as t
 from . import signal_base
 
 
-class VideoMD5Signal(
-    signal_base.SimpleSignalType, signal_base.FileHasher, signal_base.BytesHasher
-):
+class VideoMD5Signal(signal_base.SimpleSignalType, signal_base.BytesHasher):
     """
     Simple signal type for Video MD5s.
 
@@ -26,8 +24,7 @@ class VideoMD5Signal(
     that are capable of some notion of similarity, such as TMK+PDQF.
     """
 
-    INDICATOR_TYPE = "HASH_MD5"
-    TYPE_TAG = "media_type_video"
+    INDICATOR_TYPE = "VIDEO_HASH_MD5"
 
     @classmethod
     def hash_from_file(cls, path: pathlib.Path) -> str:
@@ -56,4 +53,5 @@ class PhotoMD5Signal(VideoMD5Signal):
     have much higher recall without too much loss in precision.
     """
 
+    INDICATOR_TYPE = "HASH_MD5"
     TYPE_TAG = "media_type_photo"

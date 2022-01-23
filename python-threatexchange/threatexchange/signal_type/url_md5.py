@@ -7,17 +7,16 @@ Wrapper around the URL MD5 signal types.
 
 import hashlib
 
-from . import signal_base
-from .. import common
+from threatexchange.signal_type import signal_base
+from threatexchange import common
 
 
-class UrlMD5Signal(signal_base.SimpleSignalType, signal_base.StrHasher):
+class UrlMD5Signal(signal_base.SimpleSignalType, signal_base.TextHasher):
     """
     Simple signal type for URL MD5s.
     """
 
     INDICATOR_TYPE = "HASH_URL_MD5"
-    TYPE_TAG = "media_type_url"
 
     @classmethod
     def hash_from_str(cls, url: str) -> str:

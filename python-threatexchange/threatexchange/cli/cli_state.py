@@ -16,7 +16,6 @@ import typing as t
 from threatexchange.fetcher.meta_threatexchange import collab_config
 from threatexchange.fetcher.simple import state as simple_state
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
-from threatexchange.content_type import meta
 from threatexchange.signal_type import signal_base
 from threatexchange.signal_type import index
 
@@ -102,8 +101,7 @@ class Dataset:
         self, signal_types: t.Optional[t.Iterable[signal_base.SignalType]] = None
     ) -> t.List[signal_base.SignalType]:
         """Load everything in the state directory and initialize signal types"""
-        if signal_types is None:
-            signal_types = [s() for s in meta.get_all_signal_types()]
+        assert signal_types is not None
         ret = []
         for signal_type in signal_types:
             signal_state_file = self._signal_state_file(signal_type)

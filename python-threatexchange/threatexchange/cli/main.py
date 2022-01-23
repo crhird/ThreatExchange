@@ -39,10 +39,10 @@ from threatexchange.signal_type import (
     url_md5,
     trend_query,
 )
-from threatexchange.cli.cli_state import Dataset
+from threatexchange.cli.cli_config import CLISettings
 from threatexchange.cli import (
     command_base as base,
-    fetch,
+    fetch_cmd,
     label,
     match,
     dataset_cmd,
@@ -52,7 +52,7 @@ from threatexchange.cli import (
 
 def get_subcommands() -> t.List[t.Type[base.Command]]:
     return [
-        fetch.FetchCommand,
+        fetch_cmd.FetchCommand,
         match.MatchCommand,
         label.LabelCommand,
         dataset_cmd.DatasetCommand,
@@ -223,7 +223,7 @@ def _get_settings(namespace: t.Any):
     )
     collabs = CollaborationConfigStoreBase()
 
-    return meta.FunctionalityMapping(signals, fetchers, collabs)
+    return CLISettings(meta.FunctionalityMapping(signals, fetchers, collabs))
 
 
 def _verify_directory(raw: str) -> pathlib.Path:

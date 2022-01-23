@@ -13,59 +13,14 @@ import typing as t
 import json
 import pathlib
 import functools
+from threatexchange import content_type
 
 from threatexchange.fetcher import collab_config
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
 from threatexchange.content_type import content_base
 from threatexchange.content_type import text, video, photo, pdf, url
 from threatexchange.signal_type import signal_base
-
-
-@functools.lru_cache(1)
-def get_all_content_types() -> t.List[t.Type[content_base.ContentType]]:
-    """Returns all content_type implementations for commands"""
-    return [
-        text.TextContent,
-        video.VideoContent,
-        photo.PhotoContent,
-        pdf.PDFContent,
-        url.URL,
-    ]
-
-
-@functools.lru_cache(1)
-def get_content_types_by_name() -> t.Dict[str, t.Type[content_base.ContentType]]:
-    return {c.get_name(): c for c in get_all_content_types()}
-
-
-@functools.lru_cache(1)
-def get_all_signal_types() -> t.Set[t.Type[signal_base.SignalType]]:
-    """Returns all signal_type implementations for commands"""
-    return {s for c in get_all_content_types() for s in c.get_signal_types()}
-
-
-@functools.lru_cache(1)
-def get_signal_types_by_name() -> t.Dict[str, t.Type[signal_base.SignalType]]:
-    # TODO - Convert to explicitly listing these
-    return {s.get_name(): s for s in get_all_signal_types()}
-
-
-@functools.lru_cache(maxsize=None)
-def _get_content_type_map():
-    return {
-        content_type.get_name(): content_type
-        for content_type in get_all_content_types()
-    }
-
-
-def get_content_type_for_name(name: str) -> t.Type[content_base.ContentType]:
-    """
-    Given a name, get the ContentTYpe which returns that name on calling
-    get_name().
-
-    Note: Raises KeyError if not found.
-    """
-    return _get_content_type_map()[name]
+from threatexchange.meta import FunctionalityMapping
 
 
 FETCH_STATE_DIR_NAME = "fetched_state"
@@ -134,3 +89,31 @@ class CliState(collab_config.CollaborationConfigStoreBase):
     def delete_collab(self, collab: collab_config.CollaborationConfigBase) -> None:
         """Delete a collaboration"""
         self.path_for_config(collab).unlink(missing_ok=True)
+
+
+class CLISettings:
+    """
+    A God object for all miscellanious persisted state to make the CLI work
+    """
+
+    def __init__(self, mapping: FunctionalityMapping) -> None:
+        self._mapping = mapping
+
+    def get_all_content_types(self) -> t.List[t.Type[content_base.ContentType]]:
+        return list(self._mapping.signal_and_content.content_by_name.values())
+
+    def get_content_type(self, name: str) -> t.Type[content_base.ContentType]:
+        return self._mapping.signal_and_content.content_by_name[name]
+
+    def get_all_signal_types(self) -> t.List[t.Type[signal_base.SignalType]]:
+        return list(self._mapping.signal_and_content.signal_type_by_name.values())
+
+    def get_signal_type(self, name: str) -> t.Type[signal_base.SignalType]:
+        return self._mapping.signal_and_content.signal_type_by_name[name]
+
+    def get_signal_types_for_content(
+        self, content_type: t.Type[content_base.ContentType]
+    ) -> t.List[signal_base.SignalType]:
+        # TODO - reimplement this
+        supported_signals = set(self.get_all_signal_types())
+        return [s for s in content_type.get_signal_types() if s in supported_signals]

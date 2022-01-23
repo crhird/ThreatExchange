@@ -10,11 +10,10 @@ import sys
 import typing as t
 
 from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
-from threatexchange.content_type import meta
 from threatexchange.fetcher.meta_threatexchange.descriptor import ThreatDescriptor
-from threatexchange.signal_type.signal_base import FileMatcher, HashMatcher, StrMatcher
-from . import command_base
-from .cli_state import Dataset
+from threatexchange.signal_type.signal_base import MatchesStr, TextHasher, FileHasher
+from threatexchange.cli import command_base
+from threatexchange.cli.cli_state import Dataset
 
 
 class MatchCommand(command_base.Command):
@@ -48,7 +47,6 @@ class MatchCommand(command_base.Command):
 
         ap.add_argument(
             "content_type",
-            choices=[t.get_name() for t in meta.get_all_content_types()],
             help="what kind of content to match",
         )
 
@@ -99,9 +97,7 @@ class MatchCommand(command_base.Command):
         show_false_positives: bool,
         hide_disputed: bool,
     ) -> None:
-        self.content_type = [
-            c for c in meta.get_all_content_types() if c.get_name() == content_type
-        ][0]
+        self.content_type_name = content_type
         self.input_generator = self.parse_input(content, hashes, as_text)
         self.as_hashes = hashes
         self.show_false_positives = show_false_positives

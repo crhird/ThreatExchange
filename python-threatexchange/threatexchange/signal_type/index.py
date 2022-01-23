@@ -21,6 +21,7 @@ At scale, the flow for matching looks something like:
 """
 
 import typing as t
+import pickle
 
 
 T = t.TypeVar("T")
@@ -108,9 +109,11 @@ class SignalTypeIndex(t.Generic[T]):
 
         A later call to query(H1) should return both M1 and M2
         """
-        raise NotImplementedError
+        ret = cls()
+        ret.add(entries)
+        return ret
 
-    def add(cls, entries: t.Iterable[t.Tuple[str, T]]) -> None:
+    def add(self, entries: t.Iterable[t.Tuple[str, T]]) -> None:
         """
         Add entries to an existing index. May contain elements already in the
         index.
@@ -133,3 +136,12 @@ class SignalTypeIndex(t.Generic[T]):
     def deserialize(cls, fin: t.BinaryIO) -> "SignalTypeIndex[T]":
         """Instanciate an index from a previous call to serialize"""
         raise NotImplementedError
+
+
+class PickledSignalTypeIndex(SignalTypeIndex[T]):
+    def serialize(self, fout: t.BinaryIO) -> None:
+        fout.write(pickle.dumps(self))
+
+    @classmethod
+    def deserialize(cls, fin: t.BinaryIO) -> "SignalTypeIndex[T]":
+        return pickle.loads(fin.read())

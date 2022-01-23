@@ -8,12 +8,11 @@ Hash command to convert content into signatures.
 import pathlib
 import sys
 import typing as t
+from build.lib.threatexchange.cli import cli_config
+from threatexchange.cli.cli_config import CLISettings
 
-from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
-from threatexchange.content_type import meta
-from .cli_state import Dataset
-from threatexchange.signal_type.signal_base import FileHasher, StrHasher
-from . import command_base
+from threatexchange.signal_type.signal_base import FileHasher, TextHasher
+from threatexchange.cli import command_base
 
 
 # TODO consider refactor to handle overlap with match
@@ -33,14 +32,14 @@ class HashCommand(command_base.Command):
 
         ap.add_argument(
             "content_type",
-            choices=[t.get_name() for t in meta.get_all_content_types()],
+            choices=[t.get_name() for t in cli_config.get_all_content_types()],
             help="what kind of content to hash",
         )
 
         ap.add_argument(
             "--signal-type",
             "-S",
-            choices=[t.get_name() for t in meta.get_all_signal_types()],
+            choices=[s.get_name() for s in cli_config.get_all_signal_types()],
             help="only generate these signal types",
         )
 
@@ -67,9 +66,7 @@ class HashCommand(command_base.Command):
         as_text: bool,
         content: t.Union[t.List[str], t.TextIO],
     ) -> None:
-        self.content_type = [
-            c for c in meta.get_all_content_types() if c.get_name() == content_type
-        ][0]
+        self.content_type_str = content_type
         self.signal_type = signal_type
 
         if content == [self.USE_STDIN]:
@@ -88,16 +85,18 @@ class HashCommand(command_base.Command):
             else:
                 yield pathlib.Path(token)
 
-    def execute(self, _settings) -> None:
+    def execute(self, settings: CLISettings) -> None:
+
+        settings.get_content_type(self.content_type_str)
 
         all_signal_types = [
             s
-            for s in self.content_type.get_signal_types()
+            for s in cli_config.get_all_signal_types()
             if self.signal_type in (None, s.get_name())
         ]
 
         file_hashers = [s for s in all_signal_types if issubclass(s, FileHasher)]
-        str_hashers = [s for s in all_signal_types if issubclass(s, StrHasher)]
+        str_hashers = [s for s in all_signal_types if issubclass(s, TextHasher)]
 
         for inp in self.input_generator:
             hash_fn = lambda s, t: s.hash_from_file(t)

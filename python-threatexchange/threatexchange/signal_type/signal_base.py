@@ -5,15 +5,162 @@
 Core abstractions for signal types.
 """
 
-import csv
 import pathlib
 import pickle
 import typing as t
 
 from threatexchange import common
-from threatexchange.fetcher.meta_threatexchange.descriptor import SimpleDescriptorRollup, ThreatDescriptor
-from . import index
+from threatexchange.signal_type import index
 
+
+class HashComparisonResult(t.NamedTuple):
+    match: bool
+    distance: int
+
+    @classmethod
+    def from_match(cls, dist: int = 0) -> "HashComparisonResult":
+        return cls(True, dist)
+
+    @classmethod
+    def from_no_match(cls, dist: int = 1) -> "HashComparisonResult":
+        return cls(False, dist)
+
+    @classmethod
+    def from_dist(cls, dist: int, threshold: int) -> "HashComparisonResult":
+        return cls(dist <= threshold, dist)
+
+    @classmethod
+    def from_bool(cls, matches: bool) -> "HashComparisonResult":
+        return cls(matches, int(matches))
+
+
+class SignalType:
+    """
+    Abstraction for different signal types.
+
+    A signal type is an intermediate representation of content that can be used
+    to match against similar or identical content. Sometimes called a "hash"
+    type.
+
+    This class additionally helps translates ThreatDescriptors into the correct
+    representation to do matching, as well as serialize that representation
+    into a compact form.
+    """
+
+    @classmethod
+    def get_name(cls):
+        """A compact name in lower_with_underscore style (used in filenames)"""
+        return common.class_name_to_human_name(cls.__name__, "Signal")
+
+    @classmethod
+    def get_index_cls(cls) -> t.Type[index.SignalTypeIndex]:
+        """Return the index class that handles this signal type"""
+        return TrivialSignalTypeIndex
+
+    @classmethod
+    def indicator_applies(cls, indicator_type: str, tags: t.List[str]) -> bool:
+        """Does this indicator correspond to this signal type?"""
+        raise NotImplementedError
+
+    @classmethod
+    def compare_hash(cls, hash1: str, hash2: str) -> HashComparisonResult:
+        """
+        Compare the distance of two hashes, the key operation for matching.
+
+        Note that this can just be a reference/helper, and the efficient
+        version of the algorithm can live in the index class.
+        """
+        raise NotImplementedError
+
+
+class TextHasher:
+    """
+    This class can turn text into intermediary representations (hashes)
+    """
+
+    @classmethod
+    def hash_from_str(cls, text: str) -> str:
+        """Get a string representation of the hash from a string"""
+        raise NotImplementedError
+
+    @classmethod
+    def hash_from_file(cls, file: pathlib.Path) -> str:
+        return cls.hash_from_bytes(file.read_text())
+
+
+class TrivialTextHasher(TextHasher):
+    """The text == the hash"""
+
+    @classmethod
+    def hash_from_str(cls, content: str) -> str:
+        return content
+
+
+class MatchesStr:
+    @classmethod
+    def matches_str(cls, signal: str, haystack: str) -> HashComparisonResult:
+        """
+        Compare the distance of two hashes, the key operation for matching.
+
+        Note that this can just be a reference/helper, and the efficient
+        version of the algorithm can live in the index class.
+        """
+        raise NotImplementedError
+
+
+class FileHasher:
+    """
+    This class can hash files.
+
+    If also inheiriting from StrHasher, put this second in the inheiretence
+    to prefer file hashing to reading the file in as a Str.
+    """
+
+    @classmethod
+    def hash_from_file(cls, file: pathlib.Path) -> str:
+        """Get a string representation of the hash from a file"""
+        raise NotImplementedError
+
+
+class BytesHasher(FileHasher):
+    """
+    This class can hash bytes.
+    """
+
+    @classmethod
+    def hash_from_bytes(cls, bytes_: bytes) -> str:
+        """Get a string representation of the hash from bytes."""
+        raise NotImplementedError
+
+    @classmethod
+    def hash_from_file(cls, file: pathlib.Path) -> str:
+        return cls.hash_from_bytes(file.read_bytes())
+
+
+class SimpleSignalType(SignalType):
+    """
+    Dead simple implementation for loading/storing a SignalType.
+
+    Assumes that the signal type can easily merge on a string.
+    """
+
+    INDICATOR_TYPE: t.Union[str, t.Tuple[str, ...]] = ()
+    TYPE_TAG: t.Optional[str] = None
+
+    @classmethod
+    def indicator_applies(cls, indicator_type: str, tags: t.List[str]) -> bool:
+        types = cls.INDICATOR_TYPE
+        if isinstance(cls.INDICATOR_TYPE, str):
+            types = (cls.INDICATOR_TYPE,)
+        if indicator_type not in types:
+            return False
+        if cls.TYPE_TAG is not None:
+            return cls.TYPE_TAG in tags
+        return True
+
+    @classmethod
+    def compare_hash(cls, hash1: str, hash2: str) -> HashComparisonResult:
+        return HashComparisonResult.from_bool(hash1 == hash2)
 
 class TrivialSignalTypeIndex(index.SignalTypeIndex):
     """
@@ -48,229 +195,40 @@ class TrivialSignalTypeIndex(index.SignalTypeIndex):
         return pickle.load(fin)
 
 
-class SignalMatch(t.NamedTuple):
-    # TODO - Labels probably don't belong here, because we just duplicate storage
-    #        better to have descriptor lookup with the full labels
-    labels: t.Set[str]
-    primary_descriptor_id: int
-    # TODO: Someday, also include the following:
-    # contested: bool
-    # plurality_opinion: t.Tuple(bool, t.Set[str])
-    # highest_action_severity: str
-    # opinions_by_owner: t.Dict[int, MatchOpinion]
-
-
-class SignalType:
+class TrivialLinearSearchIndex(index.SignalTypeIndex):
     """
-    Abstraction for different signal types.
+    Index that does a linear search and serializes with pickle
 
-    A signal type is an intermediate representation of content that can be used
-    to match against similar or identical content. Sometimes called a "hash"
-    type.
-
-    This class additionally helps translates ThreatDescriptors into the correct
-    representation to do matching, as well as serialize that representation
-    into a compact form.
+    O(n) is the best n, clearly.
     """
 
-    @classmethod
-    def get_name(cls):
-        """A compact name in lower_with_underscore style (used in filenames)"""
-        return common.class_name_to_human_name(cls.__name__, "Signal")
+    # You'll have to override with each usecase
+    _SIGNAL_TYPE: t.Type[SignalType]
 
-    @classmethod
-    def get_index_cls(cls) -> t.Type[index.SignalTypeIndex]:
-        """Return the index class that handles this signal type"""
-        return TrivialSignalTypeIndex
-
-    @classmethod
-    def indicator_applies(cls, indicator_type: str, tags: t.List[str]) -> bool:
-        """Does this indicator correspond to this signal type?"""
-        raise NotImplementedError
-
-    @classmethod
-    def compare_hash(cls, hash1: str, hash2: str) -> int:
-        """
-        Compare the distance of two hashes, the key operaiton for matching.
-
-        If the algorithm doesn't support distance, having 0 = match,
-        1 = no hash.
-
-        Note that this can just be a reference/helper, and the efficient
-        version of the algorithm can live in the index class.
-        """
-        raise NotImplementedError
-
-    ##########################################################################
-    # TODO - Remove  these methods after refactor
-    def process_descriptor(self, descriptor: ThreatDescriptor) -> bool:
-        """
-        Add ThreatDescriptor to the state of this type, if it is for this type.
-
-        Return true if the true if the descriptor was used.
-        """
-        return False
-
-    def load(self, path: pathlib.Path) -> None:
-        raise NotImplementedError
-
-    def store(self, path: pathlib.Path) -> None:
-        raise NotImplementedError
-
-
-class HashMatcher:
-    def match_hash(self, hash: str) -> t.List[SignalMatch]:
-        """
-        Given a representation of this SignalType, return matches.
-
-        Example - PDQ distance comparison, or MD5 exact comparison
-        """
-        raise NotImplementedError
-
-
-class FileMatcher:
-    def match_file(self, file: pathlib.Path) -> t.List[SignalMatch]:
-        """
-        Given a file containing content, return matches.
-        """
-        raise NotImplementedError
-
-
-class BytesMatcher:
-    def match_bytes(self, bytes_: bytes) -> t.List[SignalMatch]:
-        """
-        If you have already brought the file to memory, don't write it to disk,
-        hash it right there.
-        """
-        raise NotImplementedError
-
-
-class StrMatcher(FileMatcher):
-    def match(self, content: str) -> t.List[SignalMatch]:
-        """
-        Given a string representation of content, return matches.
-
-        You don't need to implement this if it doesn't make sense for your
-        signal type.
-        """
-        raise NotImplementedError
-
-    def match_file(self, path: pathlib.Path) -> t.List[SignalMatch]:
-        return self.match(path.read_text())
-
-
-class StrHasher(HashMatcher, StrMatcher):
-    """
-    This class can turn text into intermediary representations (hashes)
-    """
-
-    @classmethod
-    def hash_from_str(cls, content: str) -> str:
-        """Get a string representation of the hash from a string"""
-        raise NotImplementedError
-
-    def match(self, content: str) -> t.List[SignalMatch]:
-        str_hash = self.hash_from_str(content)
-        return self.match_hash(str_hash)
-
-
-class FileHasher(HashMatcher, FileMatcher):
-    """
-    This class can hash files.
-
-    If also inheiriting from StrHasher, put this second in the inheiretence
-    to prefer file hashing to reading the file in as a Str.
-    """
-
-    @classmethod
-    def hash_from_file(self, file: pathlib.Path) -> str:
-        """Get a string representation of the hash from a file"""
-        raise NotImplementedError
-
-    def match_file(self, path: pathlib.Path) -> t.List[SignalMatch]:
-        file_hash = self.hash_from_file(path)
-        return self.match_hash(file_hash)
-
-
-class BytesHasher(HashMatcher, BytesMatcher):
-    """
-    This class can hash bytes.
-    """
-
-    @classmethod
-    def hash_from_bytes(self, bytes_: bytes) -> str:
-        """Get a string representation of the hash from bytes."""
-        raise NotImplementedError
-
-    def match_bytes(self, bytes_: bytes) -> t.List[SignalMatch]:
-        bytes_hash = self.hash_from_bytes(bytes_)
-        return self.match_hash(bytes_hash)
-
-
-class SimpleSignalType(SignalType, HashMatcher):
-    """
-    Dead simple implementation for loading/storing a SignalType.
-
-    Assumes that the signal type can easily merge on a string.
-    """
-
-    INDICATOR_TYPE: t.Union[str, t.Tuple[str, ...]] = ()
-    TYPE_TAG: t.Optional[str] = None
-
-    @classmethod
-    def indicator_applies(cls, indicator_type: str, tags: t.List[str]) -> bool:
-        types = cls.INDICATOR_TYPE
-        if isinstance(cls.INDICATOR_TYPE, str):
-            types = (cls.INDICATOR_TYPE,)
-        if indicator_type not in types:
-            return False
-        if cls.TYPE_TAG is not None:
-            return cls.TYPE_TAG in tags
-        return True
-
-    @classmethod
-    def compare_hash(cls, hash1: str, hash2: str) -> int:
-        if hash1 == hash2:
-            return 0
-        return 1
-
-    ##########################################################################
-    # TODO - Remove these methods after refactor
     def __init__(self) -> None:
-        self.state: t.Dict[str, SimpleDescriptorRollup] = {}
+        self.state: t.List[(str, index.T)] = []
 
-    def process_descriptor(self, descriptor: ThreatDescriptor) -> bool:
-        """
-        Add ThreatDescriptor to the state of this type, if it is for this type
+    def query(self, query_hash: str) -> t.List[index.IndexMatch[index.T]]:
+        ret = []
+        for hash, payloads in self.state:
+            res = self._SIGNAL_TYPE.compare_hash(hash, query_hash)
+            if res.match:
+                for payload in payloads:
+                    ret.append(index.IndexMatch(res.distance, payload))
+        return ret
 
-        Return true if the true if the descriptor was used.
-        """
-        if not self.indicator_applies(descriptor.indicator_type, descriptor.tags):
-            return False
-        old_val = self.state.get(descriptor.raw_indicator)
-        if old_val is None:
-            self.state[
-                descriptor.raw_indicator
-            ] = SimpleDescriptorRollup.from_descriptor(descriptor)
-        else:
-            old_val.merge(descriptor)
-        return True
+    def add(self, vals: t.Iterable[t.Tuple[str, index.T]]) -> None:
+        self.state.extend(vals)
 
-    def match_hash(self, signal_str: str) -> t.List[SignalMatch]:
-        found = self.state.get(signal_str)
-        if found:
-            return [SignalMatch(found.labels, found.first_descriptor_id)]
-        return []
+    @classmethod
+    def build(cls, vals: t.Iterable[t.Tuple[str, index.T]]):
+        ret = cls()
+        ret.add(vals)
+        return ret
 
-    def load(self, path: pathlib.Path) -> None:
-        self.state.clear()
-        csv.field_size_limit(path.stat().st_size)  # dodge field size problems
-        with path.open("r", newline="") as f:
-            for row in csv.reader(f):
-                self.state[row[0]] = SimpleDescriptorRollup.from_row(row[1:])
+    def serialize(self, fout: t.BinaryIO):
+        pickle.dump(self, fout)
 
-    def store(self, path: pathlib.Path) -> None:
-        with path.open("w+", newline="") as f:
-            writer = csv.writer(f)
-            for k, v in self.state.items():
-                writer.writerow((k,) + v.as_row())
+    @classmethod
+    def deserialize(cls, fin: t.BinaryIO):
+        return pickle.load(fin)

@@ -5,12 +5,13 @@
 Wrapper around the Photo PDQ signal type.
 """
 
+from signal import signal
 import typing as t
 import pathlib
 import warnings
 
 from . import signal_base
-from threatexchange.hashing.pdq_utils import pdq_match, BITS_IN_PDQ
+from threatexchange.hashing.pdq_utils import simple_distance
 
 
 def _raise_pillow_warning():
@@ -20,9 +21,7 @@ def _raise_pillow_warning():
     )
 
 
-class PdqSignal(
-    signal_base.SimpleSignalType, signal_base.FileHasher, signal_base.BytesHasher
-):
+class PdqSignal(signal_base.SimpleSignalType, signal_base.BytesHasher):
     """
     PDQ is an open source photo similarity algorithm.
 
@@ -45,6 +44,13 @@ class PdqSignal(
     PDQ_CONFIDENT_MATCH_THRESHOLD = 31
 
     @classmethod
+    def compare_hash(cls, hash1: str, hash2: str) -> signal_base.HashComparisonResult:
+        dist = simple_distance(hash1, hash2)
+        return signal_base.HashComparisonResult.from_dist(
+            dist, cls.PDQ_CONFIDENT_MATCH_THRESHOLD
+        )
+
+    @classmethod
     def hash_from_file(cls, file: pathlib.Path) -> str:
         try:
             from threatexchange.hashing.pdq_hasher import pdq_from_file
@@ -53,19 +59,6 @@ class PdqSignal(
             return ""
         pdq_hash, _quality = pdq_from_file(file)
         return pdq_hash
-
-    def match_hash(self, signal_str: str) -> t.List[signal_base.SignalMatch]:
-
-        # for case where cli tries to match against non-pdq type hashes
-        # (filtering should likely be moved up in future to avoid silent errors)
-        if len(signal_str) != BITS_IN_PDQ / 4:
-            return []
-
-        return [
-            signal_base.SignalMatch(signal_attr.labels, signal_attr.first_descriptor_id)
-            for pdq_hash, signal_attr in self.state.items()
-            if pdq_match(pdq_hash, signal_str, self.PDQ_CONFIDENT_MATCH_THRESHOLD)
-        ]
 
     @classmethod
     def hash_from_bytes(self, bytes_: bytes) -> str:

@@ -105,5 +105,3 @@ def _validate_content_and_signal(
     for content_type in content_types:
         supported = any(s in supported_st for s in content_type.get_signal_types())
         assert supported, f"No signal types for content type: {content_type.get_name()}"
-
-    pass

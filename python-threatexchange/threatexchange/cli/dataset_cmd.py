@@ -7,7 +7,6 @@ import typing as t
 
 from ..fetcher.meta_threatexchange import threat_updates
 from ..fetcher.meta_threatexchange.api import ThreatExchangeAPI
-from ..content_type import meta
 from .cli_state import Dataset
 from ..fetcher.meta_threatexchange.threat_updates import ThreatUpdateSerialization
 from . import command_base
@@ -78,7 +77,7 @@ class DatasetCommand(command_base.Command):
         self.signal_summary = signal_summary
         self.print_records = print_records
 
-    def execute(self, api: ThreatExchangeAPI, dataset: Dataset) -> None:
+    def execute(self, settings) -> None:
         stores = [
             threat_updates.ThreatUpdateFileStore(
                 dataset.state_dir,
@@ -94,12 +93,12 @@ class DatasetCommand(command_base.Command):
 
         if self.only_type:
             signal_types = []
-            s_type = meta.get_signal_types_by_name().get(self.only_type)
+            s_type = settings.get_signal_types_by_name().get(self.only_type)
             if s_type:
                 signal_types.append(s_type)
                 self.signal_summary = True
 
-            content_type = meta.get_content_types_by_name().get(self.only_type)
+            content_type = settings.get_content_types_by_name().get(self.only_type)
             if content_type:
                 signal_types.extend(content_type.get_signal_types())
                 self.signal_summary = True
