@@ -10,6 +10,7 @@ import pickle
 import typing as t
 
 from threatexchange import common
+from threatexchange.content_type import content_base
 from threatexchange.signal_type import index
 
 
@@ -53,14 +54,14 @@ class SignalType:
         return common.class_name_to_human_name(cls.__name__, "Signal")
 
     @classmethod
+    def get_content_types(self) -> t.List[t.Type[content_base.ContentType]]:
+        """Which content types this Signal applies to (usually just one)"""
+        raise NotImplementedError
+
+    @classmethod
     def get_index_cls(cls) -> t.Type[index.SignalTypeIndex]:
         """Return the index class that handles this signal type"""
         return TrivialSignalTypeIndex
-
-    @classmethod
-    def indicator_applies(cls, indicator_type: str, tags: t.List[str]) -> bool:
-        """Does this indicator correspond to this signal type?"""
-        raise NotImplementedError
 
     @classmethod
     def compare_hash(cls, hash1: str, hash2: str) -> HashComparisonResult:

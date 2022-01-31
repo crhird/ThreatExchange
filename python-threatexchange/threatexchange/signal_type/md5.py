@@ -9,6 +9,10 @@ import hashlib
 import pathlib
 import typing as t
 
+from threatexchange.content_type.content_base import ContentType
+from threatexchange.content_type.photo import PhotoContent
+from threatexchange.content_type.video import VideoContent
+
 from . import signal_base
 
 
@@ -25,6 +29,10 @@ class VideoMD5Signal(signal_base.SimpleSignalType, signal_base.BytesHasher):
     """
 
     INDICATOR_TYPE = "VIDEO_HASH_MD5"
+
+    @classmethod
+    def get_content_types(self) -> t.List[t.Type[ContentType]]:
+        return [VideoContent]
 
     @classmethod
     def hash_from_file(cls, path: pathlib.Path) -> str:
@@ -59,3 +67,7 @@ class PhotoMD5Signal(VideoMD5Signal):
 
     INDICATOR_TYPE = "HASH_MD5"
     TYPE_TAG = "media_type_photo"
+
+    @classmethod
+    def get_content_types(self) -> t.List[t.Type[ContentType]]:
+        return [PhotoContent]

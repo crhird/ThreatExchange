@@ -124,4 +124,5 @@ class CLISettings:
     def get_collabs_for_fetcher(
         self, fetcher: SignalExchangeAPI
     ) -> t.List[collab_config.CollaborationConfigBase]:
+        # TODO implement this
         return []

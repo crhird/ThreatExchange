@@ -12,6 +12,8 @@ import typing as t
 import Levenshtein
 
 from threatexchange import common
+from threatexchange.content_type.content_base import ContentType
+from threatexchange.content_type.text import TextContent
 from threatexchange.signal_type import signal_base
 from threatexchange.signal_type import index
 
@@ -26,6 +28,10 @@ class RawTextSignal(signal_base.SimpleSignalType, signal_base.TextHasher):
     """
 
     INDICATOR_TYPE = "TEXT_STRING"
+
+    @classmethod
+    def get_content_types(self) -> t.List[t.Type[ContentType]]:
+        return [TextContent]
 
     @classmethod
     def hash_from_str(cls, content: str) -> str:

@@ -101,7 +101,7 @@ def _validate_content_and_signal(
 ) -> None:
     _validate_content_types(content_types)
     _validate_signal_types(signal_types)
-    supported_st = set(signal_types)
-    for content_type in content_types:
-        supported = any(s in supported_st for s in content_type.get_signal_types())
-        assert supported, f"No signal types for content type: {content_type.get_name()}"
+    supported_ct = set(content_types)
+    for signal_type in signal_types:
+        supported = any(c in supported_ct for c in signal_type.get_content_types())
+        assert supported, f"No signal types for content type: {signal_type.get_name()}"

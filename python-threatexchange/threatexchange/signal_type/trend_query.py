@@ -8,6 +8,8 @@ Wrapper around the Trend Query (keywords and regexes) content type.
 import json
 import re
 import typing as t
+from threatexchange.content_type.content_base import ContentType
+from threatexchange.content_type.text import TextContent
 
 from threatexchange.signal_type import signal_base
 from threatexchange.signal_type import index
@@ -54,6 +56,10 @@ class TrendQuerySignal(signal_base.SignalType, signal_base.TextHasher):
 
     They have high "recall" but potentially low "precision".
     """
+
+    @classmethod
+    def get_content_types(self) -> t.List[t.Type[ContentType]]:
+        return [TextContent]
 
     @classmethod
     def matches_str(cls, hash: str, haystack: str) -> signal_base.HashComparisonResult:

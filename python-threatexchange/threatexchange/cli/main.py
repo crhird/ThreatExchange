@@ -203,7 +203,7 @@ def _get_settings(namespace: t.Any):
     # dataset = Dataset(cfg, namespace.state_dir)
 
     signals = meta.SignalTypeMapping(
-        [photo.PhotoContent, video.VideoContent, url.URL, text.TextContent],
+        [photo.PhotoContent, video.VideoContent, url.URLContent, text.TextContent],
         [
             pdq.PdqSignal,
             md5.VideoMD5Signal,

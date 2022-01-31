@@ -10,6 +10,9 @@ import typing as t
 import pathlib
 import warnings
 
+from threatexchange.content_type.content_base import ContentType
+from threatexchange.content_type.photo import PhotoContent
+
 from . import signal_base
 from threatexchange.hashing.pdq_utils import simple_distance
 
@@ -42,6 +45,10 @@ class PdqSignal(signal_base.SimpleSignalType, signal_base.BytesHasher):
     # This may need to be updated (TODO make more configurable)
     # Hashes of distance less than or equal to this threshold are considered a 'match'
     PDQ_CONFIDENT_MATCH_THRESHOLD = 31
+
+    @classmethod
+    def get_content_types(self) -> t.List[t.Type[ContentType]]:
+        return [PhotoContent]
 
     @classmethod
     def compare_hash(cls, hash1: str, hash2: str) -> signal_base.HashComparisonResult:

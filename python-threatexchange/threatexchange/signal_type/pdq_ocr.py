@@ -12,6 +12,8 @@ import pathlib
 import warnings
 
 import Levenshtein
+from threatexchange.content_type.content_base import ContentType
+from threatexchange.content_type.photo import PhotoContent
 
 from threatexchange.hashing.pdq_utils import simple_distance
 from threatexchange import common
@@ -36,6 +38,10 @@ class PdqOcrSignal(signal_base.SimpleSignalType, signal_base.FileHasher):
     PDQ_PLUS_OCR_CONFIDENT_MATCH_THRESHOLD = 31
     # Match considered if 90% of the strings match
     LEVENSHTEIN_DISTANCE_PERCENT_THRESHOLD = 0.10
+
+    @classmethod
+    def get_content_types(self) -> t.List[t.Type[ContentType]]:
+        return [PhotoContent]
 
     @classmethod
     def hash_from_file(cls, file: pathlib.Path) -> str:

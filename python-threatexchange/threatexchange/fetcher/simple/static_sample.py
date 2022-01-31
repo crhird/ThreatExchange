@@ -7,10 +7,8 @@ The fetcher is the component that talks to external APIs to get and put signals
 """
 
 
-from dataclasses import dataclass
 import itertools
 import typing as t
-import json
 
 from threatexchange.signal_type.pdq import PdqSignal
 from threatexchange.signal_type.pdq_ocr import PdqOcrSignal

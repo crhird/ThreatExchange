@@ -4,10 +4,9 @@
 import collections
 import datetime
 import logging
-from tabnanny import check
 import time
-from turtle import update
 import typing as t
+
 from threatexchange.cli.cli_config import CLISettings
 from threatexchange.fetcher.collab_config import CollaborationConfigBase
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
@@ -15,7 +14,6 @@ from threatexchange.fetcher.fetch_state import (
     FetchCheckpointBase,
     FetchedStateStoreBase,
 )
-
 from threatexchange.fetcher.meta_threatexchange import threat_updates
 from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
 from threatexchange.cli import command_base
@@ -93,7 +91,7 @@ class FetchCommand(command_base.Command):
             return True
         if self.time_limit_sec is not None:
             if time.time() - self.start_time >= self.time_limit_sec:
-                return True 
+                return True
         return False
 
     def execute(self, settings: CLISettings) -> None:
@@ -146,14 +144,14 @@ class FetchCommand(command_base.Command):
         update_count = 0
 
         try:
-            while not self.has_hit_limits(): 
+            while not self.has_hit_limits():
                 delta = fetcher.fetch_once(collab, checkpoint)
                 update_count += delta.record_count()
                 store.merge(collab, delta)
                 checkpoint = delta.next_checkpoint
                 assert checkpoint  # Infinite loop protection
                 if not delta.has_more_data:
-                    break 
+                    break
         finally:
             store.flush()
 
