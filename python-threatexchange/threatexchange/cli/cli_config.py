@@ -18,7 +18,7 @@ from threatexchange import content_type
 from threatexchange.fetcher import collab_config
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
 from threatexchange.content_type import content_base
-from threatexchange.content_type import text, video, photo, pdf, url
+from threatexchange.content_type import text, video, photo, url
 from threatexchange.signal_type import signal_base
 from threatexchange.meta import FunctionalityMapping
 
@@ -114,9 +114,7 @@ class CLISettings:
     def get_signal_types_for_content(
         self, content_type: t.Type[content_base.ContentType]
     ) -> t.List[signal_base.SignalType]:
-        # TODO - reimplement this
-        supported_signals = set(self.get_all_signal_types())
-        return [s for s in content_type.get_signal_types() if s in supported_signals]
+        return self._mapping.signal_and_content.signal_type_by_content[content_type]
 
     def get_fetchers(self):
         return list(self._mapping.fetcher.fetchers_by_name.values())

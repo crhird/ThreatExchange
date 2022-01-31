@@ -30,6 +30,10 @@ class SignalTypeMapping:
 
         self.content_by_name = {c.get_name(): c for c in content_types}
         self.signal_type_by_name = {s.get_name(): s for s in signal_types}
+        self.signal_type_by_content = {c: [] for c in content_types}
+        for signal_type in signal_types:
+            for content_type in signal_type.get_content_types():
+                self.signal_type_by_content[content_type].append(signal_type)
 
     def get_fetcher_classes(self):
         return [f[0] for f in self.fetcher_data_by_name.values()]

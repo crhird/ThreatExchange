@@ -5,7 +5,7 @@
 Wrapper around the text content type.
 """
 
-from .content_base import ContentType
+from threatexchange.content_type.content_base import ContentType
 
 
 class TextContent(ContentType):
