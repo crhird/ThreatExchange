@@ -14,3 +14,7 @@ class URLSignal(signal_base.SimpleSignalType, signal_base.TrivialTextHasher):
     """
 
     INDICATOR_TYPE = ("URI", "RAW_URI")
+
+    @staticmethod
+    def get_examples() -> t.List[str]:
+        return ["https://developers.facebook.com/docs/threat-exchange/reference/apis/"]

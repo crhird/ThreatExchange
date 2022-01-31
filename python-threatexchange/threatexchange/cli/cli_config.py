@@ -117,3 +117,11 @@ class CLISettings:
         # TODO - reimplement this
         supported_signals = set(self.get_all_signal_types())
         return [s for s in content_type.get_signal_types() if s in supported_signals]
+
+    def get_fetchers(self):
+        return list(self._mapping.fetcher.fetchers_by_name.values())
+
+    def get_collabs_for_fetcher(
+        self, fetcher: SignalExchangeAPI
+    ) -> t.List[collab_config.CollaborationConfigBase]:
+        return []

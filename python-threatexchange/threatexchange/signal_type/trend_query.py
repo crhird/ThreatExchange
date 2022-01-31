@@ -64,6 +64,28 @@ class TrendQuerySignal(signal_base.SignalType, signal_base.TextHasher):
     def get_index_cls(cls) -> t.Type[index.SignalTypeIndex]:
         return TrendQueryIndex
 
+    @staticmethod
+    def get_examples() -> t.List[str]:
+        return [
+            json.dumps(
+                {
+                    "and": [
+                        {
+                            "or": [
+                                "basketball",
+                                "basket ball",
+                                "basket-ball",
+                                "bball",
+                                "hoops",
+                            ]
+                        },
+                        {"or": ["play", "tonight", "today", "now"]},
+                    ],
+                    "not": ["tomorrow", "baseball", "hockey", "football", "soccer"],
+                }
+            )
+        ]
+
 
 class TrendQueryIndex(index.PickledSignalTypeIndex[index.T]):
     def __init__(self) -> None:

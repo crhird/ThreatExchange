@@ -49,6 +49,21 @@ class RawTextSignal(signal_base.SimpleSignalType, signal_base.TextHasher):
     def get_index_cls(cls) -> t.Type[index.SignalTypeIndex]:
         return LevenshteinLinearSearch
 
+    @staticmethod
+    def get_examples() -> t.List[str]:
+        return [
+            "The quick brown fox jumps over the lazy dog",
+            (
+                "We the People of the United States, in Order to form a more "
+                "perfect Union, establish Justice, ensure domestic "
+                "Tranquility, provide for the common defence, promote the "
+                "general Welfare, and secure the Blessings of Liberty to "
+                "ourselves and our Posterity, do ordain and establish this "
+                "Constitution for the United States of America."
+            ),
+            "bball now?",
+        ]
+
 
 class LevenshteinLinearSearch(signal_base.TrivialLinearSearchIndex):
     _SIGNAL_TYPE = RawTextSignal

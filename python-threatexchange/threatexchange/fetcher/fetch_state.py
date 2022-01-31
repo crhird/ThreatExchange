@@ -22,21 +22,13 @@ class FetchCheckpointBase:
     If you need to store checkpoint information, this is the place to do it
     """
 
-    def stale(self) -> bool:
+    def is_stale(self) -> bool:
         """
         For some APIs, stored state may become invalid if stored too long.
 
         Return true if the old data should be deleted and fetched from scratch.
         """
         return False
-
-    def done(self) -> bool:
-        """
-        Returns true if the API has no more data at this time.
-
-        Probably don't store this, or store it as a timestamp.
-        """
-        return True
 
 
 class SignalOpinionCategory(Enum):
@@ -108,6 +100,12 @@ class FetchDeltaBase:
         """A serializable checkpoint for fetch."""
         raise NotImplementedError
 
+    def has_more(self) -> bool:
+        """
+        Returns true if the API has no more data at this time.
+        """
+        raise NotImplementedError
+
 
 # TODO t.Generic[TFetchDeltaBase, TFetchedSignalDataBase, FetchCheckpointBase]
 #      to help keep track of the expected subclasses for an impl
@@ -127,7 +125,9 @@ class FetchedStateStoreBase:
     since they need to be consistent between instanciation
     """
 
-    def get_checkpoint(self, collab: CollaborationConfigBase) -> FetchCheckpointBase:
+    def get_checkpoint(
+        self, collab: CollaborationConfigBase
+    ) -> t.Optional[FetchCheckpointBase]:
         """
         Returns the last checkpoint passed to merge() after a flush()
         """

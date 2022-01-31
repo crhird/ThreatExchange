@@ -77,6 +77,13 @@ class PdqOcrSignal(signal_base.SimpleSignalType, signal_base.FileHasher):
             )
         return signal_base.HashComparisonResult(match, dist)
 
+    @staticmethod
+    def get_examples() -> t.List[str]:
+        return [
+            "a72dd3eadec2800ba74b59a9532d0b22011fd9e0daa1da3f576e602db999a754,This is a sample text string",
+            "b2539a60de78841da72fcdeb5da21bf00185632ddaadb23d174ea1885999cb65,This is a sample text string",
+        ]
+
 
 def _levenshtein_text_match(str_a: str, str_b: str, threshold: float) -> bool:
     """

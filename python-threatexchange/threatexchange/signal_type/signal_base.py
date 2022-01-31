@@ -72,6 +72,20 @@ class SignalType:
         """
         raise NotImplementedError
 
+    @classmethod
+    def validate_hash(cls, hash1: str) -> bool:
+        """
+        Returns true if this appears to be a serialized signal for this type
+        """
+        return True
+
+    @staticmethod
+    def get_examples() -> t.List[str]:
+        """
+        @see threatexchange.fetcher.simple.static_sample
+        """
+        return []
+
 
 class TextHasher:
     """
@@ -161,6 +175,7 @@ class SimpleSignalType(SignalType):
     @classmethod
     def compare_hash(cls, hash1: str, hash2: str) -> HashComparisonResult:
         return HashComparisonResult.from_bool(hash1 == hash2)
+
 
 class TrivialSignalTypeIndex(index.SignalTypeIndex):
     """

@@ -3,8 +3,18 @@
 
 import collections
 import datetime
+import logging
+from tabnanny import check
 import time
+from turtle import update
 import typing as t
+from threatexchange.cli.cli_config import CLISettings
+from threatexchange.fetcher.collab_config import CollaborationConfigBase
+from threatexchange.fetcher.fetch_api import SignalExchangeAPI
+from threatexchange.fetcher.fetch_state import (
+    FetchCheckpointBase,
+    FetchedStateStoreBase,
+)
 
 from threatexchange.fetcher.meta_threatexchange import threat_updates
 from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
@@ -31,9 +41,9 @@ class FetchCommand(command_base.Command):
     @classmethod
     def init_argparse(cls, ap) -> None:
         ap.add_argument(
-            "--full",
+            "--clean",
             action="store_true",
-            help="force a refetch from the beginning of time (this is almost certainly not needed)",
+            help="force a refetch from the beginning of time (you almost never need to do this)",
         )
         ap.add_argument(
             "--skip-index-rebuild",
@@ -42,82 +52,125 @@ class FetchCommand(command_base.Command):
         )
         ap.add_argument("--limit", type=int, help="stop after fetching this many items")
         ap.add_argument(
-            "--stop-time",
+            "--per-collab-time-limit-sec",
             type=int,
-            help="only fetch until this point",
+            help="stop fetching after this many seconds",
+        )
+        ap.add_argument(
+            "--only-api",
+            help="only fetch from this API",
+        )
+        ap.add_argument(
+            "--only-collab",
+            help="only fetch for this collaboration",
         )
 
     def __init__(
         self,
-        full: bool,
-        stop_time: t.Optional[int],
+        clean: bool,
+        per_collab_time_limit_sec: t.Optional[int],
         limit: t.Optional[int],
         skip_index_rebuild: bool,
     ) -> None:
-        self.full = full
-        self.stop_time = stop_time
+        self.clean = clean
+        self.time_limit_sec = per_collab_time_limit_sec
         self.limit = limit
         self.skip_index_rebuild = skip_index_rebuild
 
+        # Limits
+        self.fetched_count = 0
+        self.start_time = time.time()
+
         # Progress
-        self.current_pgroup = 0
         self.last_update_time = 0
         # Print first update after 5 seconds
         self.last_update_printed = time.time() - self.PROGRESS_PRINT_INTERVAL_SEC + 5
         self.processed = 0
         self.counts: t.Dict[str, int] = collections.Counter()
 
-    def execute(self, api: ThreatExchangeAPI, dataset: Dataset) -> None:
-        privacy_groups = dataset.config.privacy_groups
-        stores = []
-        for privacy_group in privacy_groups:
-            indicator_store = threat_updates.ThreatUpdateFileStore(
-                dataset.state_dir,
-                privacy_group,
-                api.app_id,
-                serialization=CliIndicatorSerialization,
-            )
-            stores.append(indicator_store)
-            if self.full:
-                indicator_store.reset()
-            else:
-                indicator_store.load_checkpoint()
-            if indicator_store.stale:
-                indicator_store.reset()
-            self.last_update_time = indicator_store.fetch_checkpoint
-            if len(privacy_groups) > 1:
-                self.current_pgroup = privacy_group
+    def has_hit_limits(self):
+        if self.limit is not None and self.fetched_count >= self.limit:
+            return True
+        if self.time_limit_sec is not None:
+            if time.time() - self.start_time >= self.time_limit_sec:
+                return True 
+        return False
 
-            self._print_progress()
-            if indicator_store.fetch_checkpoint >= time.time():
-                continue
+    def execute(self, settings: CLISettings) -> None:
+        fetchers = settings.get_fetchers()
 
-            delta = indicator_store.next_delta
-            if self.stop_time:
-                delta.end = self.stop_time
-            try:
-                delta.incremental_sync_from_threatexchange(
-                    api, limit=self.limit, progress_fn=self._progress
-                )
-            except:
-                self.stderr("Exception occurred! Attempting to save...")
-                # Force delta to show finished
-                delta.end = delta.current
-                raise
-            finally:
-                if delta:
-                    indicator_store.apply_updates(delta)
+        all_succeeded = True
+        any_succeded = False
 
-        self.stderr(f"Processed {self.processed} updates:")
+        for fetcher in fetchers:
+            succeeded = self.execute_for_fetcher(settings, fetcher)
+            all_succeeded = all_succeeded and succeeded
+            any_succeded = any_succeded or any_succeded
 
-        if self.processed:
-            for name, count in sorted(self.counts.items(), key=lambda i: -i[1]):
-                self.stderr(f"{name}: {count:+}")
-
-        # Rebuild CLI indices
-        if not self.skip_index_rebuild:
+        if any_succeded and not self.skip_index_rebuild:
             self.stderr("Rebuilding match indices...")
-            dataset_cmd.generate_cli_indices(dataset, stores)
+            # TODO
+
+        if not all_succeeded:
+            raise command_base.CommandError("Some collabs had errors!", 3)
+
+    def execute_for_fetcher(
+        self, settings: CLISettings, fetcher: SignalExchangeAPI
+    ) -> bool:
+        success = True
+        for collab in settings.get_collabs_for_fetcher(fetcher):
+            try:
+                self.execute_for_collab(settings, fetcher, collab)
+            except Exception:
+                msg = f"{collab.name} ({fetcher.get_name()}) failed to fetch!"
+                self.stderr(msg)
+                logging.exception(msg)
+                success = False
+        return success
+
+    def execute_for_collab(
+        self,
+        settings: CLISettings,
+        fetcher: SignalExchangeAPI,
+        collab: CollaborationConfigBase,
+    ) -> None:
+        store: FetchedStateStoreBase = None
+
+        checkpoint = self._verify_store_and_checkpoint(store, collab)
+
+        if checkpoint is not None and checkpoint.is_up_to_date():
+            return
+
+        # TODO Print progress
+
+        update_count = 0
+
+        try:
+            while not self.has_hit_limits(): 
+                delta = fetcher.fetch_once(collab, checkpoint)
+                update_count += delta.record_count()
+                store.merge(collab, delta)
+                checkpoint = delta.next_checkpoint
+                assert checkpoint  # Infinite loop protection
+                if not delta.has_more_data:
+                    break 
+        finally:
+            store.flush()
+
+    def _verify_store_and_checkpoint(
+        self, store: FetchedStateStoreBase, collab: CollaborationConfigBase
+    ) -> t.Optional[FetchCheckpointBase]:
+        if self.clean:
+            store.clear(collab)
+            return None
+
+        checkpoint = store.get_checkpoint(collab)
+
+        if checkpoint.stale():
+            store.clear(collab)
+            return None
+
+        return checkpoint
 
     def _progress(self, update: threat_updates.ThreatUpdateJSON) -> None:
         self.processed += 1

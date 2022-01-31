@@ -60,6 +60,12 @@ class SimpleFetchDelta(fetch_state.FetchDeltaBase):
     def next_checkpoint(self) -> fetch_state.FetchCheckpointBase:
         return self.checkpoint
 
+    def has_more(self) -> bool:
+        # Assumes that empty updates means end of the record. If your API is
+        # filtering down data in some way, you may accidentally hit this,
+        # and you'll probably want to add an explicit "done" field
+        return bool(self.updates)
+
 
 class SimpleFetchedStateStore(fetch_state.FetchedStateStoreBase):
     """

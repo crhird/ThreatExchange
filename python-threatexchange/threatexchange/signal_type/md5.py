@@ -43,6 +43,10 @@ class VideoMD5Signal(signal_base.SimpleSignalType, signal_base.BytesHasher):
         bytes_hash.update(bytes_)
         return bytes_hash.hexdigest()
 
+    @staticmethod
+    def get_examples() -> t.List[str]:
+        return ["cab08b36195edb1a1231d2d09fa450e0", "d41d8cd98f00b204e9800998ecf8427e"]
+
 
 class PhotoMD5Signal(VideoMD5Signal):
     """
