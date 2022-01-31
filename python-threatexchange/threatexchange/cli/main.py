@@ -43,24 +43,24 @@ from threatexchange.cli.cli_config import CLISettings
 from threatexchange.cli import (
     command_base as base,
     fetch_cmd,
-    label,
-    match,
+    label_cmd,
     dataset_cmd,
     hash_cmd,
+    match_cmd,
 )
 
 
 def get_subcommands() -> t.List[t.Type[base.Command]]:
     return [
         fetch_cmd.FetchCommand,
-        match.MatchCommand,
-        label.LabelCommand,
+        match_cmd.MatchCommand,
+        label_cmd.LabelCommand,
         dataset_cmd.DatasetCommand,
         hash_cmd.HashCommand,
     ]
 
 
-def get_argparse() -> argparse.ArgumentParser:
+def get_argparse(settings: CLISettings) -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -77,13 +77,6 @@ def get_argparse() -> argparse.ArgumentParser:
         help="the App token for ThreatExchange",
     )
     ap.add_argument(
-        "--state-dir",
-        "-s",
-        type=_verify_directory,
-        metavar="DIR",
-        help="the directory with the config state",
-    )
-    ap.add_argument(
         "--fb-threatexchange-endpoint",
         "-E",
         # For facebook developers testing new APIs, allow pointing
@@ -92,19 +85,18 @@ def get_argparse() -> argparse.ArgumentParser:
     )
     subparsers = ap.add_subparsers(title="verbs", help="which action to do")
     for command in get_subcommands():
-        command.add_command_to_subparser(subparsers)
+        command.add_command_to_subparser(settings, subparsers)
 
     return ap
 
 
-def execute_command(namespace) -> None:
+def execute_command(settings: CLISettings, namespace) -> None:
     if not hasattr(namespace, "command_cls"):
         get_argparse().print_help()
         return
     command_cls = namespace.command_cls
     try:
         # Init everything
-        settings = _get_settings(namespace)
         command_argspec = inspect.getfullargspec(command_cls.__init__)
         arg_names = set(command_argspec[0])
         # Since we didn't import click, use hard-to-debug magic to init the command
@@ -185,7 +177,7 @@ def init_config_file(cli_provided: t.IO = None) -> CollaborationConfig:
         return CollaborationConfig.load(f)
 
 
-def _get_settings(namespace: t.Any):
+def _get_settings():
     """
     Configure the behavior and functionality.
     """
@@ -234,9 +226,10 @@ def _verify_directory(raw: str) -> pathlib.Path:
 
 
 def main(args: t.Optional[t.Sequence[t.Text]] = None) -> None:
-    ap = get_argparse()
+    settings = _get_settings()
+    ap = get_argparse(settings)
     namespace = ap.parse_args(args)
-    execute_command(namespace)
+    execute_command(settings, namespace)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ import sys
 
 from threatexchange import common
 from threatexchange import meta
+from threatexchange.cli.cli_config import CLISettings
 
 
 class CommandError(Exception):
@@ -29,7 +30,7 @@ class Command:
     """
 
     @classmethod
-    def add_command_to_subparser(cls, subparsers) -> None:
+    def add_command_to_subparser(cls, settings: CLISettings, subparsers) -> None:
         """
         Shortcut for adding the command to the parser.
 
@@ -42,10 +43,12 @@ class Command:
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         command_ap.set_defaults(command_cls=cls)
-        cls.init_argparse(command_ap)
+        cls.init_argparse(settings, command_ap)
 
     @classmethod
-    def init_argparse(cls, argparse: argparse.ArgumentParser) -> None:
+    def init_argparse(
+        cls, settings: CLISettings, argparse: argparse.ArgumentParser
+    ) -> None:
         """
         Program the command subparser for __init__
 

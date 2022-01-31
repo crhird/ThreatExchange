@@ -9,6 +9,7 @@ The fetcher is the component that talks to external APIs to get and put signals
 
 import typing as t
 
+from threatexchange import common
 from threatexchange.fetcher.collab_config import CollaborationConfigBase
 from threatexchange.signal_type.signal_base import SignalType
 from threatexchange.fetcher import fetch_state as state
@@ -54,7 +55,11 @@ class SignalExchangeAPI:
         storage solutions (like the one in the CLI) which stores fetched
         data by (SignalExchangeAPI.name(), collab_name).
         """
-        return cls.__name__
+        name = cls.__name__
+        for suffix in ("API", "Exchange"):
+            if name.endswith(suffix):
+                name = name[: -len(suffix)]
+        return common.class_name_to_human_name(name, "Signal")
 
     @classmethod
     def get_checkpoint_cls(cls) -> t.Type[state.FetchCheckpointBase]:

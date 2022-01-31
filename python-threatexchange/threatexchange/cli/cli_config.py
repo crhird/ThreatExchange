@@ -12,15 +12,14 @@ from importlib.resources import path
 import typing as t
 import json
 import pathlib
-import functools
-from threatexchange import content_type
+from threatexchange.cli import cli_state
 
 from threatexchange.fetcher import collab_config
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
 from threatexchange.content_type import content_base
-from threatexchange.content_type import text, video, photo, url
+from threatexchange.fetcher.simple.static_sample import StaticSampleSignalExchangeAPI
 from threatexchange.signal_type import signal_base
-from threatexchange.meta import FunctionalityMapping
+from threatexchange.meta import FetcherSyncer, FunctionalityMapping
 
 
 FETCH_STATE_DIR_NAME = "fetched_state"
@@ -99,6 +98,12 @@ class CLISettings:
     def __init__(self, mapping: FunctionalityMapping) -> None:
         self._mapping = mapping
 
+        self.__TODO_collabs = {
+            StaticSampleSignalExchangeAPI: [
+                collab_config.CollaborationConfigBase("sample", True, {}, {})
+            ],
+        }
+
     def get_all_content_types(self) -> t.List[t.Type[content_base.ContentType]]:
         return list(self._mapping.signal_and_content.content_by_name.values())
 
@@ -119,8 +124,14 @@ class CLISettings:
     def get_fetchers(self):
         return list(self._mapping.fetcher.fetchers_by_name.values())
 
+    def get_fetcher_and_store(self) -> t.List[FetcherSyncer]:
+        return self._mapping.fetcher.fetcher_and_store
+
+    def get_all_collab_names(self) -> t.List[str]:
+        return [c.name for cc in self.__TODO_collabs.values() for c in cc]
+
     def get_collabs_for_fetcher(
         self, fetcher: SignalExchangeAPI
     ) -> t.List[collab_config.CollaborationConfigBase]:
         # TODO implement this
-        return []
+        return self.__TODO_collabs.get(fetcher, [])

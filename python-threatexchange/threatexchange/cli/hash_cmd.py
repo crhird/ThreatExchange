@@ -28,18 +28,18 @@ class HashCommand(command_base.Command):
     USE_STDIN = "-"
 
     @classmethod
-    def init_argparse(cls, ap) -> None:
+    def init_argparse(cls, settings: CLISettings, ap) -> None:
 
         ap.add_argument(
             "content_type",
-            choices=[t.get_name() for t in cli_config.get_all_content_types()],
+            choices=[c.get_name() for c in settings.get_all_content_types()],
             help="what kind of content to hash",
         )
 
         ap.add_argument(
             "--signal-type",
             "-S",
-            choices=[s.get_name() for s in cli_config.get_all_signal_types()],
+            choices=[s.get_name() for s in settings.get_all_signal_types()],
             help="only generate these signal types",
         )
 
@@ -47,16 +47,13 @@ class HashCommand(command_base.Command):
             "--as-text",
             "-T",
             action="store_true",
-            help="force input to be interpreted as text instead of as filenames",
+            help="interpret content as text instead of as filenames",
         )
 
         ap.add_argument(
             "content",
             nargs="+",
-            help=(
-                "what to match against. Accepts filenames, "
-                "quoted strings, or '-' to read newline-separated stdin"
-            ),
+            help="list of content or '-' for stdin",
         )
 
     def __init__(
@@ -86,12 +83,11 @@ class HashCommand(command_base.Command):
                 yield pathlib.Path(token)
 
     def execute(self, settings: CLISettings) -> None:
-
-        settings.get_content_type(self.content_type_str)
+        content_type = settings.get_content_type(self.content_type_str)
 
         all_signal_types = [
             s
-            for s in cli_config.get_all_signal_types()
+            for s in settings.get_signal_types_for_content(content_type)
             if self.signal_type in (None, s.get_name())
         ]
 

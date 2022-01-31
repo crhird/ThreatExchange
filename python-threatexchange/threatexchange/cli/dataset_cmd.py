@@ -23,7 +23,7 @@ class DatasetCommand(command_base.Command):
     """
 
     @classmethod
-    def init_argparse(cls, ap) -> None:
+    def init_argparse(cls, _settings, ap) -> None:
         ap.add_argument(
             "--rebuild-indices",
             "-r",

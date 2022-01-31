@@ -9,8 +9,8 @@ import typing as t
 
 from threatexchange.fetcher.meta_threatexchange import descriptor
 from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
-from .cli_state import Dataset
-from . import command_base
+from threatexchange.cli.cli_state import Dataset
+from threatexchange.cli import command_base
 
 
 class LabelCommand(command_base.Command):
@@ -22,11 +22,11 @@ class LabelCommand(command_base.Command):
 
     Examples:
       # Label descriptor
-      $> threatexchange -c te.cfg label false_positive,other_label descriptor 12345
+      $ threatexchange -c te.cfg label false_positive,other_label descriptor 12345
     """
 
     @classmethod
-    def init_argparse(cls, ap) -> None:
+    def init_argparse(cls, _settings, ap) -> None:
         ap.add_argument(
             "labels",
             type=lambda s: s.strip().split(","),

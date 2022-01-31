@@ -56,6 +56,7 @@ class FetcherSyncer(t.NamedTuple):
 class FetcherMapping:
     def __init__(self, fetchers: t.List[FetcherSyncer]) -> None:
         _validate_signal_apis(f.api for f in fetchers)
+        self.fetcher_and_store = fetchers
         self.fetchers_by_name = {f.api.get_name(): f for f in fetchers}
 
 

@@ -15,11 +15,7 @@ from threatexchange.fetcher.fetch_state import (
     FetchedStateStoreBase,
 )
 from threatexchange.fetcher.meta_threatexchange import threat_updates
-from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
 from threatexchange.cli import command_base
-from threatexchange.cli import dataset_cmd
-from threatexchange.cli.cli_state import Dataset
-from threatexchange.cli.dataset.simple_serialization import CliIndicatorSerialization
 
 
 class FetchCommand(command_base.Command):
@@ -37,7 +33,7 @@ class FetchCommand(command_base.Command):
     PROGRESS_PRINT_INTERVAL_SEC = 30
 
     @classmethod
-    def init_argparse(cls, ap) -> None:
+    def init_argparse(cls, settings: CLISettings, ap) -> None:
         ap.add_argument(
             "--clean",
             action="store_true",
@@ -52,14 +48,18 @@ class FetchCommand(command_base.Command):
         ap.add_argument(
             "--per-collab-time-limit-sec",
             type=int,
+            metavar="SEC",
             help="stop fetching after this many seconds",
         )
         ap.add_argument(
             "--only-api",
+            choices=[f[0].get_name() for f in settings.get_fetchers()],
             help="only fetch from this API",
         )
         ap.add_argument(
             "--only-collab",
+            # TODO - truncate this if its long
+            choices=settings.get_all_collab_names(),
             help="only fetch for this collaboration",
         )
 
@@ -97,6 +97,12 @@ class FetchCommand(command_base.Command):
     def execute(self, settings: CLISettings) -> None:
         fetchers = settings.get_fetchers()
 
+        if self.clean:
+            self.stderr("Clearing fetched state")
+            for fetcher, store in settings.get_fetcher_and_store():
+                for collab in settings.get_collabs_for_fetcher(fetcher):
+                    store.clear(collab)
+
         all_succeeded = True
         any_succeded = False
 
@@ -117,6 +123,8 @@ class FetchCommand(command_base.Command):
     ) -> bool:
         success = True
         for collab in settings.get_collabs_for_fetcher(fetcher):
+            if not collab.enabled:
+                continue
             try:
                 self.execute_for_collab(settings, fetcher, collab)
             except Exception:
@@ -136,9 +144,6 @@ class FetchCommand(command_base.Command):
 
         checkpoint = self._verify_store_and_checkpoint(store, collab)
 
-        if checkpoint is not None and checkpoint.is_up_to_date():
-            return
-
         # TODO Print progress
 
         update_count = 0
@@ -146,7 +151,9 @@ class FetchCommand(command_base.Command):
         try:
             while not self.has_hit_limits():
                 delta = fetcher.fetch_once(collab, checkpoint)
-                update_count += delta.record_count()
+                batch_size = delta.record_count()
+                update_count += batch_size
+                self.fetched_count += batch_size
                 store.merge(collab, delta)
                 checkpoint = delta.next_checkpoint
                 assert checkpoint  # Infinite loop protection
@@ -158,13 +165,9 @@ class FetchCommand(command_base.Command):
     def _verify_store_and_checkpoint(
         self, store: FetchedStateStoreBase, collab: CollaborationConfigBase
     ) -> t.Optional[FetchCheckpointBase]:
-        if self.clean:
-            store.clear(collab)
-            return None
-
         checkpoint = store.get_checkpoint(collab)
 
-        if checkpoint.stale():
+        if checkpoint is not None and checkpoint.stale():
             store.clear(collab)
             return None
 

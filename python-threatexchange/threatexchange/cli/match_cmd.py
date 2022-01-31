@@ -6,8 +6,11 @@ Match command for parsing simple data sources against the dataset.
 """
 
 import pathlib
+from random import choice
 import sys
 import typing as t
+from build.lib.threatexchange.cli.cli_config import get_all_signal_types
+from threatexchange.cli.cli_config import CLISettings
 
 from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
 from threatexchange.fetcher.meta_threatexchange.descriptor import ThreatDescriptor
@@ -43,11 +46,19 @@ class MatchCommand(command_base.Command):
     USE_STDIN = "-"
 
     @classmethod
-    def init_argparse(cls, ap) -> None:
+    def init_argparse(cls, settings: CLISettings, ap) -> None:
 
         ap.add_argument(
             "content_type",
+            choices=[c.get_name() for c in settings.get_all_content_types()],
             help="what kind of content to match",
+        )
+
+        ap.add_argument(
+            "--signal_type",
+            "-S",
+            choices=[s.get_name() for s in settings.get_all_signal_types()],
+            help="limit to this signal type",
         )
 
         ap.add_argument(
@@ -55,8 +66,7 @@ class MatchCommand(command_base.Command):
             "-H",
             action="store_true",
             help=(
-                "instead of content (i.e. videos), "
-                "input contains intermediate representations (i.e. video MD5s)"
+                "force input to be interpreted " "as signals for the given signal type"
             ),
         )
 
@@ -64,15 +74,15 @@ class MatchCommand(command_base.Command):
             "--as-text",
             "-T",
             action="store_true",
-            help="force input to be interpreted as text instead of as filenames",
+            help=("force input to be interpreted " "as text instead of as filenames"),
         )
 
         ap.add_argument(
             "content",
             nargs="+",
             help=(
-                "what to match against. Accepts filenames, "
-                "quoted strings, or '-' to read newline-separated stdin"
+                "what to scan for matches. By default assumes filenames. "
+                "Use '-' to read newline-separated stdin"
             ),
         )
 
@@ -141,7 +151,8 @@ class MatchCommand(command_base.Command):
     def execute(self, api: ThreatExchangeAPI, dataset: Dataset) -> None:
         if dataset.is_cache_empty:
             self.stderr(
-                "Looks like you are running this for the first time. Fetching some sample data."
+                "Looks like you are running this "
+                "for the first time. Fetching some sample data."
             )
             raise NotImplementedError("TODO dcallies")
 

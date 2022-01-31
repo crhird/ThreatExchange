@@ -34,24 +34,24 @@ class StaticSampleSignalExchangeAPI(SignalExchangeAPI):
 
     def fetch_once(
         self,
-        _collab: CollaborationConfigBase,
+        collab: CollaborationConfigBase,
         _checkpoint: t.Optional[state.FetchCheckpointBase],
     ) -> SimpleFetchDelta:
 
-        pdqs = [_signal(PdqSignal, s) for s in PdqSignal.get_examples()]
-        pdq_ocrs = [_signal(PdqOcrSignal, s) for s in PdqOcrSignal.get_examples()]
-        vmd5s = [_signal(VideoMD5Signal, s) for s in VideoMD5Signal.get_examples()]
-        urls = [_signal(URLSignal, s) for s in URLSignal.get_examples()]
-        text = [_signal(RawTextSignal, s) for s in RawTextSignal.get_examples()]
-        trend_query = [_signal(TrendQuery, s) for s in TrendQuerySignal.get_examples()]
+        sample_signals = []
+        for stype in collab.only_signal_types:
+            sample_signals.extend(_signals(stype))
 
         return SimpleFetchDelta(
-            dict(itertools.chain((pdqs, pdq_ocrs, vmd5s, urls, text, trend_query))),
+            dict(sample_signals),
             state.FetchCheckpointBase(),
         )
 
 
-def _signal(
-    sig_cls, ind: str
-) -> t.Tuple[t.Tuple[t.Type[SignalType], str], state.SignalOpinion]:
-    return (sig_cls, ind), state.SignalOpinion.get_trivial()
+def _signals(
+    sig_cls,
+) -> t.List[t.Tuple[t.Tuple[t.Type[SignalType], str], state.SignalOpinion]]:
+    return [
+        ((sig_cls, s), state.SignalOpinion.get_trivial())
+        for s in sig_cls.get_examples()
+    ]
