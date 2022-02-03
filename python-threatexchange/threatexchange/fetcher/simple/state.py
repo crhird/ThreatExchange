@@ -1,7 +1,9 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 
+from collections import defaultdict
 from dataclasses import dataclass, field
+import logging
 import typing as t
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
 
@@ -11,11 +13,11 @@ from threatexchange.fetcher.collab_config import CollaborationConfigBase
 
 
 @dataclass
-class SimpleFetchedSignalData(fetch_state.FetchedSignalMetadata):
+class SimpleFetchedSignalMetadata(fetch_state.FetchedSignalMetadata):
     """
-    Append + replace opinions by owner ID
+    Simple dataclass for fetched data.
 
-    If you add any fields, make sure they are merged as well.
+    Merge by addition rather than replacement.
     """
 
     opinions: t.List[fetch_state.SignalOpinion] = field(default_factory=list)
@@ -23,36 +25,33 @@ class SimpleFetchedSignalData(fetch_state.FetchedSignalMetadata):
     def get_as_opinions(self) -> t.List[fetch_state.SignalOpinion]:
         return self.opinions
 
-    def merge(self, newer: "SimpleFetchedSignalData") -> None:
-        """Assumes apppend, with merge on owner ID"""
-        if not self.opinions or not newer.opinions:
-            return
+    @classmethod
+    def merge(
+        cls, older: "SimpleFetchedSignalMetadata", newer: "SimpleFetchedSignalMetadata"
+    ) -> "SimpleFetchedSignalMetadata":
+        if not older.opinions:
+            return newer
 
-        by_owner = {o.owner_id: o for o in self.opinions}
-        self.opinions = [by_owner.get(o.owner_id, o) for o in self.opinions]
+        by_owner = {o.owner_id: o for o in newer.opinions}
+        return cls([by_owner.get(o.owner_id, o) for o in older.opinions])
+
+    @classmethod
+    def get_trivial(cls):
+        return cls([fetch_state.SignalOpinion.get_trivial()])
 
 
 @dataclass
-class SimpleFetchDelta(fetch_state.FetchDeltaBase):
+class SimpleFetchDelta(fetch_state.FetchDeltaWithUpdateStream):
     """
-    A simpler merger based on type (SignalType.get_name()) and str
+    Simple class for deltas.
 
     If the record is set to None, this indicates the record should be
     deleted if it exists.
     """
 
-    updates: t.Dict[t.Tuple[str, str], t.Optional[SimpleFetchedSignalData]]
+    updates: t.Dict[t.Tuple[str, str], t.Optional[SimpleFetchedSignalMetadata]]
     checkpoint: fetch_state.FetchCheckpointBase
-
-    def merge(self, newer: "SimpleFetchDelta"):
-        for k, v in newer.updates.items():
-            if v is None:
-                self.updates.pop(k, None)
-            elif k in self.updates:
-                self.updates[k].merge(v)
-            else:
-                self.updates[k] = v
-        self.checkpoint = newer.checkpoint
+    done: bool  # powers has_more
 
     def record_count(self) -> int:
         return len(self.updates)
@@ -61,52 +60,90 @@ class SimpleFetchDelta(fetch_state.FetchDeltaBase):
         return self.checkpoint
 
     def has_more(self) -> bool:
-        # Assumes that empty updates means end of the record. If your API is
-        # filtering down data in some way, you may accidentally hit this,
-        # and you'll probably want to add an explicit "done" field
-        return bool(self.updates)
+        return not self.done
+
+    def get_as_update_dict(
+        self,
+    ) -> t.Dict[t.Tuple[str, str], t.Optional[SimpleFetchedSignalMetadata]]:
+        return self.updates
+
+
+@dataclass
+class _StateTracker:
+    updates_by_type: t.Dict[str, t.Dict[str, SimpleFetchedSignalMetadata]]
+    checkpoint: t.Optional[fetch_state.FetchCheckpointBase]
+    dirty: bool = False
+
+    def merge(self, newer: SimpleFetchDelta) -> None:
+        if not newer.updates:
+            return
+        newer_by_type = defaultdict(list)
+        for (stype, signal_str), record in newer.updates.items():
+            newer_by_type[stype].append((signal_str, record))
+
+        for n_type, n_updates in newer_by_type.items():
+            o_updates = self.updates_by_type.setdefault(n_type, {})
+            for sig_str, new_record in n_updates:
+                if new_record is None:
+                    o_updates.pop(sig_str, None)
+                else:
+                    old_record = o_updates.get(sig_str)
+                    if old_record:
+                        new_record = new_record.merge(old_record, new_record)
+                    o_updates[sig_str] = new_record
+        self.checkpoint = newer.checkpoint
+        self.dirty = True
 
 
 class SimpleFetchedStateStore(fetch_state.FetchedStateStoreBase):
     """
     Standardizes on merging on (type, indicator), merges in memory.
-
-    The entirety of the state is assumped to fit in a SimpleFetchDelta
-    object or child class.
     """
 
     def __init__(
         self,
-        api_cls: SignalExchangeAPI,
+        api_cls: t.Type[SignalExchangeAPI],
     ) -> None:
         self.api_cls = api_cls
-        self._state = None
-        self._dirty = False
-        self._id_map = None
+        self._state: t.Dict[str, _StateTracker] = {}
 
-    def _read_state_as_delta(
+    def _read_state(
         self,
         collab_name: str,
-    ) -> SimpleFetchDelta:
+    ) -> t.Optional[
+        t.Tuple[
+            t.Dict[str, t.Dict[str, SimpleFetchedSignalMetadata]],
+            t.Optional[fetch_state.FetchCheckpointBase],
+        ]
+    ]:
         raise NotImplementedError
 
-    def _write_state_as_delta(self, collab_name: str, delta: SimpleFetchDelta) -> None:
+    def _write_state(
+        self,
+        collab_name: str,
+        updates_by_type: t.Dict[str, t.Dict[str, SimpleFetchedSignalMetadata]],
+        checkpoint: fetch_state.FetchCheckpointBase,
+    ) -> None:
         raise NotImplementedError
 
     def get_checkpoint(
         self, collab: CollaborationConfigBase
-    ) -> fetch_state.FetchCheckpointBase:
-        return self.in_memory_state.checkpoint
+    ) -> t.Optional[fetch_state.FetchCheckpointBase]:
+        return self._get_state(collab.name).checkpoint
 
-    @property
-    def in_memory_state(self):
-        if self._state is None:
-            self._state = self._read_state_as_delta()
-            assert self._state is not None
-            self._id_map = None
-        return self._state
+    def _get_state(self, collab_name: str) -> _StateTracker:
+        if collab_name not in self._state:
+            read_state = self._read_state(collab_name) or ({}, None)
+            ret = _StateTracker(*read_state)
+            self._state[collab_name] = ret
+            return ret
+        return self._state[collab_name]
 
-    def merge(self, collab: CollaborationConfigBase, delta: SimpleFetchDelta) -> None:
+    def merge(
+        self,
+        collab: CollaborationConfigBase,
+        delta: fetch_state.FetchDeltaWithUpdateStream,
+    ) -> None:
         """
         Merge a FetchDeltaBase into the state.
 
@@ -114,102 +151,30 @@ class SimpleFetchedStateStore(fetch_state.FetchedStateStoreBase):
         equivalent work.
         """
 
-        state = self.in_memory_state
+        state = self._get_state(collab.name)
 
-        if delta.record_count() == 0 and delta.checkpoint in (None, state.checkpoint):
-            return  # No op update?
+        if delta.record_count() == 0 and delta.checkpoint in (
+            None,
+            state.checkpoint,
+        ):
+            logging.warning("No op update for %s", collab.name)
+            return
+
         state.merge(delta)
-        self._dirty = True
 
     def flush(self):
-        if not self._dirty:
-            return
-        self._write_state_as_delta(self._state)
-        self._dirty = False
+        for collab_name, state in self._state.items():
+            if state.dirty:
+                assert state.checkpoint
+                self._write_state(collab_name, state.updates_by_type, state.checkpoint)
+                state.dirty = False
 
     def get_for_signal_type(
-        self, signal_type: t.Type[SignalType]
-    ) -> t.List[t.Tuple[str, int]]:
-        # TODO this is stored dumbly
-        type_str = SignalType.get_name()
-        return [
-            (indicator, s.id)
-            for (ind_type_str, indicator), s in self.in_memory_state.updates.items()
-        ]
-
-    def get_metadata_from_id(
-        self, metadata_id: int
-    ) -> t.Optional[fetch_state.FetchedSignalMetadata]:
-        """
-        Fetch the metadata from an ID
-        """
-        if self._id_map is None:
-            self._id_map = {v.id: v for v in self.in_memory_state.values()}
-        return self._id_map.get(metadata_id)
-
-
-@dataclass
-class SimpleFetchDeltaWithSyntheticID(fetch_state.FetchDeltaBase):
-    """
-    A version of fetch delta that creates its own IDs on merge.
-
-    Only the delta that is being merge into generates IDs, and is
-    assumed to be initially empty.
-
-    i.e.
-
-    >>> will_generate_ids = SimpleFetchDeltaWithSyntheticID({})
-    >>> assumed_not_to_have_ids = SimpleFetchDeltaWithSyntheticID({"test", "test": val})
-    >>> will_generate_ids.merge(assumed_not_to_have_ids)
-
-    >>> assumed_not_to_have_ids.updates["test", "test"]
-    0
-    >>> will_generate_ids.updates["test", "test"]
-    1
-    >>> assumed_not_to_have_ids.merge(will_generate_ids)
-    AssertionError
-    """
-
-    updates: t.Dict[
-        t.Tuple[str, str],
-        t.Optional[SimpleFetchedSignalData],
-    ]
-    # Shadow checkpoint to keep arguments in same relative order
-    checkpoint: fetch_state.FetchCheckpointBase
-    last_assigned_id: int = 0
-
-    @classmethod
-    def from_simple_opinons(
-        cls,
-        signal_type: t.Type[SignalType],
-        signal_strs: t.Iterable[str],
-        categorty: fetch_state.SignalOpinionCategory = fetch_state.SignalOpinionCategory.TRUE_POSITIVE,
-    ) -> "SimpleFetchDeltaWithSyntheticID":
-        return cls(
-            {
-                (signal_type.get_name(), signal_str): SimpleFetchedSignalData([])
-                for signal_str in signal_strs
-            }
-        )
-
-    def merge(self, newer: "SimpleFetchDeltaWithSyntheticID") -> None:
-        assert (
-            not self.last_assigned_id or not self.updates
-        ), "Non-empty base with no ids"
-        for k, v in newer.updates.items():
-            assert not v.id, "newer delta already has IDs"
-            if v is None:
-                self.updates.pop(k, None)
-            elif k in self.updates:
-                self.updates[k].merge(v)
-            else:
-                self.last_assigned_id += 1
-                v.id = self.last_assigned_id
-                self.updates[k] = v
-        self.checkpoint = newer.checkpoint
-
-    def record_count(self) -> int:
-        return len(self.updates)
-
-    def next_checkpoint(self) -> fetch_state.FetchCheckpointBase:
-        return self.checkpoint
+        self, collabs: t.List[CollaborationConfigBase], signal_type: t.Type[SignalType]
+    ) -> t.Dict[str, t.Dict[str, SimpleFetchedSignalMetadata]]:
+        st_name = signal_type.get_name()
+        ret = {}
+        for collab in collabs:
+            state = self._get_state(collab.name)
+            ret[collab.name] = state.updates_by_type.get(st_name, {})
+        return ret

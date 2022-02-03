@@ -9,7 +9,7 @@ needed to power API features.
 
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import IntEnum
 import typing as t
 
 from threatexchange.fetcher.collab_config import CollaborationConfigBase
@@ -28,10 +28,14 @@ class FetchCheckpointBase:
 
         Return true if the old data should be deleted and fetched from scratch.
         """
-        return False
+        return False  # Default, assume checkpoints never expire
+
+    def get_progress_timestamp(self) -> t.Optional[int]:
+        """If the checkpoint can, give the time it corresponds to"""
+        return None
 
 
-class SignalOpinionCategory(Enum):
+class SignalOpinionCategory(IntEnum):
     """
     What the opinion on a signal is.
 
@@ -83,6 +87,25 @@ class FetchedSignalMetadata:
     def get_as_opinions(self) -> t.List[SignalOpinion]:
         return [SignalOpinion.get_trivial()]
 
+    @classmethod
+    def merge_metadata(
+        cls, _older: "FetchedSignalMetadata", newer: "FetchedSignalMetadata"
+    ) -> "FetchedSignalMetadata":
+        """
+        The merge strategy when streaming updates.
+        """
+        return newer
+
+
+@dataclass
+class FetchedSignalMetadataWithMerge(FetchedSignalMetadata):
+    """
+    Metadata that supports merging
+    """
+
+    def merge(self, newer: "FetchedSignalMetadataWithMerge") -> None:
+        raise NotImplementedError
+
 
 class FetchDeltaBase:
     """
@@ -103,6 +126,25 @@ class FetchDeltaBase:
     def has_more(self) -> bool:
         """
         Returns true if the API has no more data at this time.
+        """
+        raise NotImplementedError
+
+
+class FetchDeltaWithUpdateStream(FetchDeltaBase):
+    """
+    For most APIs, they can represented in a simple update stream.
+
+    This allows naive implementations for storage.
+    """
+
+    def get_as_update_dict() -> t.Dict[
+        t.Tuple[str, str], t.Optional[FetchedSignalMetadata]
+    ]:
+        """
+        Returns the contents of the delta as
+         (signal_type, signal_str) => record
+        If the record is set to None, this indicates the record should be
+        deleted if it exists.
         """
         raise NotImplementedError
 
@@ -156,18 +198,16 @@ class FetchedStateStoreBase:
         """
         raise NotImplementedError
 
-    # TODO - if sticking with this signature, convert to t.NamedTuple
     def get_for_signal_type(
-        self, signal_type: t.Type[SignalType]
-    ) -> t.List[t.Tuple[str, int]]:
+        self, collabs: t.List[CollaborationConfigBase], signal_type: t.Type[SignalType]
+    ) -> t.Dict[str, t.Dict[str, FetchedSignalMetadata]]:
         """
-        Get as a map of SignalType.name() => (signal, MetataData ID).
+        Get as a map of CollabConfigBase.name() => {signal: Metadata}
 
-        If the underlying API doesn't support IDs, one solution
+        This is meant for simple storage and indexing solutions, but at
+        scale, you likely want to store as IDs rather than the full metadata.
 
-        It's assumed that signal is unique (all merging has already taken place).
-
-        TODO this currently implies that you are going to load the entire dataset
+        TODO: This currently implies that you are going to load the entire dataset
         into memory, which once we start getting huge amounts of data, might not make
         sense.
         """

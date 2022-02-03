@@ -9,7 +9,6 @@ import pathlib
 from random import choice
 import sys
 import typing as t
-from build.lib.threatexchange.cli.cli_config import get_all_signal_types
 from threatexchange.cli.cli_config import CLISettings
 
 from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI

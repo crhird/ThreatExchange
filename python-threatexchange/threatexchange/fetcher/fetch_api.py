@@ -74,7 +74,7 @@ class SignalExchangeAPI:
     @classmethod
     def get_config_class(cls) -> CollaborationConfigBase:
         """Returns the dataclass used to store records for this API"""
-        return CollaborationConfigBase  # Default = Only 1 collab possible
+        return CollaborationConfigBase
 
     def resolve_owner(self, id: int) -> str:
         """
@@ -100,6 +100,7 @@ class SignalExchangeAPI:
 
     def fetch_once(
         self,
+        supported_signal_types: t.List[t.Type[SignalType]],
         collab: CollaborationConfigBase,
         # None if fetching for the first time,
         # otherwise the previous FetchDelta returned

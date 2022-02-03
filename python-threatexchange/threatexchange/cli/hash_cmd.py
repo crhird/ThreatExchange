@@ -8,7 +8,6 @@ Hash command to convert content into signatures.
 import pathlib
 import sys
 import typing as t
-from build.lib.threatexchange.cli import cli_config
 from threatexchange.cli.cli_config import CLISettings
 
 from threatexchange.signal_type.signal_base import FileHasher, TextHasher

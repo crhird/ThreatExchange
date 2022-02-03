@@ -14,14 +14,7 @@ import sys
 from threatexchange import common
 from threatexchange import meta
 from threatexchange.cli.cli_config import CLISettings
-
-
-class CommandError(Exception):
-    """Wrapper for exceptions which cause return codes"""
-
-    def __init__(self, message: str, returncode: int = 1) -> None:
-        super().__init__(message)
-        self.returncode = returncode
+from threatexchange.cli.exceptions import CommandError
 
 
 class Command:

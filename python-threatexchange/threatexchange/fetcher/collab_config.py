@@ -22,6 +22,7 @@ class CollaborationConfigBase:
     """
 
     name: str
+    api: str  # Often a const for implementations
     enabled: bool  # Whether to match this or not
     only_signal_types: t.Set[str]  # Only fetch and index these types
     not_signal_types: t.Set[str]  # Don't fetch and index these types
@@ -34,6 +35,6 @@ class CollaborationConfigStoreBase:
         """
         raise NotImplementedError
 
-    def get_collab(self, name: str):
+    def get_collab(self, name: str) -> t.Optional[CollaborationConfigBase]:
         """Get a specific collab config by name"""
         return next((c for c in self.get_all() if c.name == name), None)

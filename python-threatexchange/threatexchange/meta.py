@@ -48,16 +48,10 @@ class SignalTypeMapping:
         ]
 
 
-class FetcherSyncer(t.NamedTuple):
-    api: SignalExchangeAPI
-    store: FetchedStateStoreBase
-
-
 class FetcherMapping:
-    def __init__(self, fetchers: t.List[FetcherSyncer]) -> None:
-        _validate_signal_apis(f.api for f in fetchers)
-        self.fetcher_and_store = fetchers
-        self.fetchers_by_name = {f.api.get_name(): f for f in fetchers}
+    def __init__(self, fetchers: t.List[SignalExchangeAPI]) -> None:
+        _validate_signal_apis(f for f in fetchers)
+        self.fetchers_by_name = {f.get_name(): f for f in fetchers}
 
 
 @dataclass
@@ -80,8 +74,9 @@ def _validate_signal_apis(apis: t.Iterable[SignalExchangeAPI]):
         name = a.get_name()
         assert (
             name not in names
-        ), f"Duplicate name in {SignalExchangeAPI.__name__}s: '{name}'"
+        ), f"Duplicate name in {a.__name__}s: '{name}'"
         names.add(name)
+        
 
 
 def _validate_content_types(content_types: t.List[t.Type[ContentType]]) -> None:

@@ -12,12 +12,10 @@ between stages, and a state file to store hashes.
 """
 
 import argparse
-from functools import lru_cache
+import logging
 import inspect
-import os
-import os.path
 import pathlib
-import re
+import os
 import sys
 import typing as t
 
@@ -25,11 +23,6 @@ from threatexchange import meta
 
 from threatexchange.fetcher.simple.static_sample import StaticSampleSignalExchangeAPI
 
-from threatexchange.fetcher.collab_config import CollaborationConfigStoreBase
-from threatexchange.fetcher.meta_threatexchange import descriptor
-
-from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
-from threatexchange.fetcher.meta_threatexchange.collab_config import CollaborationConfig
 from threatexchange.content_type import photo, video, text, url
 from threatexchange.signal_type import (
     pdq,
@@ -39,6 +32,7 @@ from threatexchange.signal_type import (
     url_md5,
     trend_query,
 )
+from threatexchange.cli.cli_config import CliState
 from threatexchange.cli.cli_config import CLISettings
 from threatexchange.cli import (
     command_base as base,
@@ -95,6 +89,7 @@ def execute_command(settings: CLISettings, namespace) -> None:
         get_argparse().print_help()
         return
     command_cls = namespace.command_cls
+    logging.debug("Setup complete, handing off to %s", command_cls.__name__)
     try:
         # Init everything
         command_argspec = inspect.getfullargspec(command_cls.__init__)
@@ -110,71 +105,6 @@ def execute_command(settings: CLISettings, namespace) -> None:
     except KeyboardInterrupt:
         # No stack for CTRL+C
         sys.exit(130)
-
-
-def get_app_token(cli_option: str = None) -> str:
-    """Get the API key from a variety of fallback sources"""
-
-    file_loc = pathlib.Path("~/.txtoken").expanduser()
-    environment_var = "TX_ACCESS_TOKEN"
-    token = ""
-    source: t.Union[pathlib.Path, str] = ""
-    if cli_option:
-        source = "cli argument"
-        token = cli_option
-    elif os.environ.get(environment_var):
-        source = f"{environment_var} environment variable"
-        token = os.environ[environment_var]
-    elif file_loc.exists() and file_loc.read_text():
-        source = file_loc
-        token = file_loc.read_text()
-    else:
-        raise base.CommandError(
-            (
-                "Can't find App Token, pass it in using one of: \n"
-                "  * a cli argument\n"
-                f"  * in the environment as {environment_var}\n"
-                f"  * in a file at {file_loc}\n"
-                "https://developers.facebook.com/tools/accesstoken/"
-            ),
-            2,
-        )
-    token = token.strip()
-    if not is_valid_app_token(token):
-        raise base.CommandError(
-            f"Your current app token (from {source}) is invalid.\n"
-            "Double check that it's an 'App Token' from "
-            "https://developers.facebook.com/tools/accesstoken/",
-            2,
-        )
-    return token
-
-
-def is_valid_app_token(token: str) -> bool:
-    """Returns true if the string looks like a valid token"""
-    return bool(re.match("[0-9]{8,}(?:%7C|\\|)[a-zA-Z0-9_\\-]{20,}", token))
-
-
-def init_config_file(cli_provided: t.IO = None) -> CollaborationConfig:
-    """Initialize the collaboration file from a variety of sources"""
-    if cli_provided is not None:
-        return CollaborationConfig.load(cli_provided)
-    path_order = ("te.cfg", "~/te.cfg")
-    for loc in path_order:
-        path = pathlib.Path(loc).expanduser()
-        if path.exists():
-            break
-    else:
-        print(
-            (
-                "Looks like you haven't set up a collaboration config, "
-                "so using the sample one against public data"
-            ),
-            file=sys.stderr,
-        )
-        return CollaborationConfig.get_example_config()
-    with path.open() as f:
-        return CollaborationConfig.load(f)
 
 
 def _get_settings():
@@ -207,25 +137,29 @@ def _get_settings():
     )
     fetchers = meta.FetcherMapping(
         [
-            meta.FetcherSyncer(
-                StaticSampleSignalExchangeAPI(),
-                None,
-            ),
+            StaticSampleSignalExchangeAPI(),
         ]
     )
-    collabs = CollaborationConfigStoreBase()
+    state = CliState(list(fetchers.fetchers_by_name.values()))
 
-    return CLISettings(meta.FunctionalityMapping(signals, fetchers, collabs))
+    return CLISettings(meta.FunctionalityMapping(signals, fetchers, state), state)
 
 
-def _verify_directory(raw: str) -> pathlib.Path:
-    ret = pathlib.Path(raw)
-    if ret.exists() and not ret.is_dir():
-        raise argparse.ArgumentTypeError(f"{ret} is a file, not a directory")
-    return ret
+def _setup_logging():
+    level = logging.DEBUG
+    verbose = os.getenv("TX_VERBOSE", "0")
+    if verbose == "0":
+        level = logging.CRITICAL
+    if verbose == "1":
+        level = logging.INFO
+    logging.basicConfig(
+        format="%(asctime)s %(levelname).1s] %(message)s", level=level, force=True
+    )
 
 
 def main(args: t.Optional[t.Sequence[t.Text]] = None) -> None:
+    _setup_logging()
+
     settings = _get_settings()
     ap = get_argparse(settings)
     namespace = ap.parse_args(args)
