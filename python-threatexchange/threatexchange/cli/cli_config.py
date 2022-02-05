@@ -20,8 +20,8 @@ from threatexchange.content_type import content_base
 from threatexchange.fetcher.fetch_state import FetchedStateStoreBase
 from threatexchange.fetcher.simple.static_sample import StaticSampleSignalExchangeAPI
 from threatexchange.signal_type import signal_base
-from threatexchange.meta import FunctionalityMapping
-from threatexchange.cli.cli_state import CliSimpleState
+from threatexchange.meta import FunctionalityMapping, SignalTypeMapping
+from threatexchange.cli.cli_state import CliSimpleState, CliIndexStore
 
 
 CONFIG_FILENAME = "config.json"
@@ -142,6 +142,7 @@ class CLISettings:
         self._mapping = mapping
         self._state = cli_state
         self._sample_message_printed = False
+        self.index_store = CliIndexStore(cli_state.index_dir)
 
     def get_all_content_types(self) -> t.List[t.Type[content_base.ContentType]]:
         return list(self._mapping.signal_and_content.content_by_name.values())
@@ -168,12 +169,20 @@ class CLISettings:
     ) -> FetchedStateStoreBase:
         return CliSimpleState(fetcher, self._state.dir_for_fetched_state(fetcher))
 
+    def get_fetch_store_for_collab(
+        self, collab: collab_config.CollaborationConfigBase
+    ) -> FetchedStateStoreBase:
+        return self.get_fetch_store_for_fetcher(
+            self._mapping.fetcher.fetchers_by_name[collab.api]
+        )
+
     def get_all_collabs(
         self, *, default_to_sample: bool = False
     ) -> t.List[collab_config.CollaborationConfigBase]:
         collabs = self._state.get_all()
         if not collabs and default_to_sample:
             return [self._get_sample_collab()]
+        # Should this check whether the APIs are all valid?
         return collabs
 
     def _get_sample_collab(self) -> collab_config.CollaborationConfigBase:

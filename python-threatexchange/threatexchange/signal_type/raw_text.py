@@ -46,7 +46,7 @@ class RawTextSignal(signal_base.SimpleSignalType, signal_base.TextHasher):
         ldiff = abs(len(hash1) - len(hash2))
 
         if ldiff > match_threshold:
-            return signal_base.HashComparisonResult.no_match_result()
+            return signal_base.HashComparisonResult.from_no_match()
 
         distance = Levenshtein.distance(hash1, hash2)
         return signal_base.HashComparisonResult(distance <= match_threshold, distance)
@@ -73,3 +73,8 @@ class RawTextSignal(signal_base.SimpleSignalType, signal_base.TextHasher):
 
 class LevenshteinLinearSearch(signal_base.TrivialLinearSearchIndex):
     _SIGNAL_TYPE = RawTextSignal
+
+    def add(self, vals: t.Iterable[t.Tuple[str, index.T]]) -> None:
+        # Raw text needs to be normalized somewhere - this is probably the
+        # wrong place (we should be sanitizing it before it comes in)
+        return super().add((common.normalize_string(s), v) for s, v in vals)

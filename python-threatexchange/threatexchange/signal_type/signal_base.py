@@ -226,11 +226,10 @@ class TrivialLinearSearchIndex(index.SignalTypeIndex):
 
     def query(self, query_hash: str) -> t.List[index.IndexMatch[index.T]]:
         ret = []
-        for hash, payloads in self.state:
+        for hash, payload in self.state:
             res = self._SIGNAL_TYPE.compare_hash(hash, query_hash)
             if res.match:
-                for payload in payloads:
-                    ret.append(index.IndexMatch(res.distance, payload))
+                ret.append(index.IndexMatch(res.distance, payload))
         return ret
 
     def add(self, vals: t.Iterable[t.Tuple[str, index.T]]) -> None:

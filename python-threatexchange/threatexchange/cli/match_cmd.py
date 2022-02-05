@@ -5,17 +5,42 @@
 Match command for parsing simple data sources against the dataset.
 """
 
+import argparse
+import functools
+import logging
 import pathlib
-from random import choice
 import sys
 import typing as t
-from threatexchange.cli.cli_config import CLISettings
+from build.lib.threatexchange.signal_type.signal_base import StrMatcher
+from threatexchange.fetcher.fetch_state import FetchedSignalMetadata
 
-from threatexchange.fetcher.meta_threatexchange.api import ThreatExchangeAPI
-from threatexchange.fetcher.meta_threatexchange.descriptor import ThreatDescriptor
+from threatexchange.signal_type.index import IndexMatch, SignalTypeIndex
+from threatexchange.cli.exceptions import CommandError
+from threatexchange.signal_type.signal_base import SignalType
+from threatexchange.cli.cli_config import CLISettings
+from threatexchange.content_type.content_base import ContentType
+
 from threatexchange.signal_type.signal_base import MatchesStr, TextHasher, FileHasher
 from threatexchange.cli import command_base
-from threatexchange.cli.cli_state import Dataset
+
+
+def _choices_pre_type(choices: t.List[str], type: t.Callable[[str], t.Any]):
+    """
+    Argparse parses choices after type, which is sometimes undesirable.
+
+    So fix it with duct tape. type=_choices_pre_type()
+    """
+
+    def ret(s: str):
+        if s not in choices:
+            raise argparse.ArgumentTypeError(
+                "invalid choice: %s (choose from %s)",
+                s,
+                ", ".join(repr(c) for c in choices),
+            )
+        return type(s)
+
+    return ret
 
 
 class MatchCommand(command_base.Command):
@@ -49,14 +74,20 @@ class MatchCommand(command_base.Command):
 
         ap.add_argument(
             "content_type",
-            choices=[c.get_name() for c in settings.get_all_content_types()],
+            type=_choices_pre_type(
+                [c.get_name() for c in settings.get_all_content_types()],
+                settings.get_content_type,
+            ),
             help="what kind of content to match",
         )
 
         ap.add_argument(
-            "--signal_type",
+            "--only-signal",
             "-S",
-            choices=[s.get_name() for s in settings.get_all_signal_types()],
+            type=_choices_pre_type(
+                [s.get_name() for s in settings.get_all_signal_types()],
+                settings.get_signal_type,
+            ),
             help="limit to this signal type",
         )
 
@@ -70,10 +101,10 @@ class MatchCommand(command_base.Command):
         )
 
         ap.add_argument(
-            "--as-text",
-            "-T",
+            "--inline",
+            "-I",
             action="store_true",
-            help=("force input to be interpreted " "as text instead of as filenames"),
+            help=("force input to be intepreted inline instead of as files"),
         )
 
         ap.add_argument(
@@ -99,41 +130,49 @@ class MatchCommand(command_base.Command):
 
     def __init__(
         self,
-        content_type: str,
+        content_type: t.Type[ContentType],
+        only_signal: t.Optional[t.Type[SignalType]],
         hashes: bool,
-        as_text: bool,
+        inline: bool,
         content: t.List[str],
         show_false_positives: bool,
         hide_disputed: bool,
     ) -> None:
-        self.content_type_name = content_type
-        self.input_generator = self.parse_input(content, hashes, as_text)
+        self.content_type = content_type
+        self.only_signal = only_signal
+        self.input_generator = self.parse_input(content, hashes, inline)
+        self.inline = inline
         self.as_hashes = hashes
         self.show_false_positives = show_false_positives
         self.hide_disputed = hide_disputed
+
+        if only_signal and content_type not in only_signal.get_content_types():
+            raise CommandError(
+                f"{only_signal.get_name()} does not "
+                f"apply to {content_type.get_name()}",
+                2,
+            )
 
     def parse_input(
         self,
         input_: t.Iterable[str],
         input_is_hashes: bool,
-        force_input_to_text: bool,
+        inline: bool,
         no_stderr=False,
     ) -> t.Generator[t.Union[str, pathlib.Path], None, None]:
-        def interpret_token(
-            tok: str,
-        ) -> t.Generator[t.Union[str, pathlib.Path], None, None]:
-            if force_input_to_text:
-                yield tok
+        def interpret_token(tok: str) -> t.Union[str, pathlib.Path]:
+            if inline:
+                return tok
             path = pathlib.Path(token)
-            if path.exists():
-                yield path
-            yield tok
+            if not path.is_file():
+                raise CommandError(f"No such file {path}", 2)
+            return path
 
         for token in input_:
             token = token.rstrip()
             if not no_stderr and token == self.USE_STDIN:
                 yield from self.parse_input(
-                    sys.stdin, input_is_hashes, force_input_to_text, no_stderr=True
+                    sys.stdin, input_is_hashes, inline, no_stderr=True
                 )
                 continue
             parsed = interpret_token(token)
@@ -141,75 +180,60 @@ class MatchCommand(command_base.Command):
                 yield from self.parse_input(
                     parsed.open("r"),
                     input_is_hashes=True,
-                    force_input_to_text=True,
+                    inline=True,
                     no_stderr=True,
                 )
             else:
-                yield from parsed
+                yield parsed
 
-    def execute(self, api: ThreatExchangeAPI, dataset: Dataset) -> None:
-        if dataset.is_cache_empty:
-            self.stderr(
-                "Looks like you are running this "
-                "for the first time. Fetching some sample data."
-            )
-            raise NotImplementedError("TODO dcallies")
+    def execute(self, settings: CLISettings) -> None:
 
-        all_signal_types = dataset.load_cache(
-            s() for s in self.content_type.get_signal_types()
+        signal_types = settings.get_signal_types_for_content(self.content_type)
+
+        if self.only_signal:
+            signal_types = [self.only_signal]
+
+        if self.inline:
+            signal_types = [
+                s for s in signal_types if issubclass(s, (TextHasher, StrMatcher))
+            ]
+        else:
+            signal_types = [s for s in signal_types if issubclass(s, FileHasher)]
+
+        logging.info(
+            "Signal types that apply: %s",
+            ", ".join(s.get_name() for s in signal_types) or "None!",
         )
 
-        file_matchers = [s for s in all_signal_types if isinstance(s, FileMatcher)]
-        str_matchers: t.List[t.Any] = [
-            s for s in all_signal_types if isinstance(s, StrMatcher)
-        ]
+        matchers = []
+        for s_type in signal_types:
+            index = settings.index_store.load_index(s_type)
+            if index is None:
+                logging.info("No index for %s, skipping", s_type.get_name())
+                continue
+            query = None
+            if self.inline:
+                if issubclass(s_type, TextHasher):
+                    query = lambda t: index.query(s_type.hash_from_str(t))
+                elif issubclass(s_type, StrMatcher):
+                    query = lambda t: index.query(t)
+            else:
+                query = lambda f: index.query(s_type.hash_from_file(f))
+            if query:
+                matchers.append((s_type, query))
 
-        match_str = lambda s, t: s.match(t)
-        if self.as_hashes:
-            match_str = lambda s, t: s.match_hash(t)
-            str_matchers = [s for s in all_signal_types if isinstance(s, HashMatcher)]
+        if not matchers:
+            self.stderr("No data to match against")
+            return
 
-        seen = set()
         for inp in self.input_generator:
-            match_fn = lambda s, t: s.match_file(t)
-            signal_types = file_matchers
-            if isinstance(inp, str):
-                match_fn = match_str
-                signal_types = str_matchers
-
-            for signal_type in signal_types:
-                for match in match_fn(signal_type, inp):
-                    if match.primary_descriptor_id in seen:
-                        continue
-                    seen.add(match.primary_descriptor_id)
-                    labels = sorted(
-                        l
-                        for l in match.labels
-                        if l in dataset.config.labels_for_collaboration
-                    )
-                    # If a lone DISPUTED, this means it is just a lone NON_MALICIOUS
-                    # No one does this intentionally, it means that it was originally
-                    # a disputed descriptor where the original author withdrew later
-                    # If they owner of the dangling NON_MALICIOUS descriptor had
-                    # used a reaction, it would have cleaned itself up, so lets
-                    # just not show it.
-                    # (This can be overridded in the collab config e.g.
-                    # for sample data we do want to show these descriptor.)
-                    if (
-                        labels == [ThreatDescriptor.DISPUTED]
-                        and not dataset.config.show_safe_list
-                    ):
-                        continue
-                    if self.hide_disputed and ThreatDescriptor.DISPUTED in labels:
-                        continue
-                    if (
-                        not self.show_false_positives
-                        and ThreatDescriptor.FALSE_POSITIVE in labels
-                    ):
-                        continue
-
-                    print(
-                        match.primary_descriptor_id,
-                        signal_type.get_name(),
-                        " ".join(labels),
-                    )
+            seen = set()
+            for s_type, matcher in matchers:
+                results: t.List[IndexMatch] = matcher(inp)
+                for r in results:
+                    metadatas: t.List[t.Tuple[str, FetchedSignalMetadata]] = r.metadata
+                    for collab, fetched_data in metadatas:
+                        if collab in seen:
+                            continue
+                        seen.add(collab)
+                        print(s_type.get_name(), f"- ({collab})", fetched_data)

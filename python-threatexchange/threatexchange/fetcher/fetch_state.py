@@ -10,7 +10,9 @@ needed to power API features.
 
 from dataclasses import dataclass
 from enum import IntEnum
+from functools import reduce
 import typing as t
+from unicodedata import category
 
 from threatexchange.fetcher.collab_config import CollaborationConfigBase
 from threatexchange.signal_type.signal_base import SignalType
@@ -72,6 +74,53 @@ class SignalOpinion:
         return cls(0, SignalOpinionCategory.WORTH_INVESTIGATING, [])
 
 
+class AggregateSignalOpinionCategory(IntEnum):
+    """
+    Represent multiple opinions as one.
+
+    Keep in Sync with SignalOpinionCategory
+    """
+
+    FALSE_POSITIVE = 0  # Signal generates false positives
+    WORTH_INVESTIGATING = 1  # Indirect indicator
+    TRUE_POSITIVE = 2  # Confirmed meets category
+    DISPUTED = 3  # Some positive, some negative
+
+    @classmethod
+    def from_opinion_categories(
+        cls, opinion_categories: t.Iterable[SignalOpinionCategory]
+    ) -> "AggregateSignalOpinionCategory":
+        return reduce(cls.aggregate, opinion_categories)
+
+    @classmethod
+    def aggregate(
+        cls, old: "AggregateSignalOpinionCategory", new: SignalOpinionCategory
+    ) -> "AggregateSignalOpinionCategory":
+        new = AggregateSignalOpinionCategory(new)
+        lo = min(old, new)
+        hi = max(old, new)
+        if lo == hi:
+            return lo
+        return cls.DISPUTED if lo == cls.FALSE_POSITIVE else hi
+
+
+@dataclass
+class AggregateSignalOpinion:
+
+    category: AggregateSignalOpinionCategory
+    tags: t.Set[str]
+
+    @classmethod
+    def from_opinions(cls, opinions: t.List[SignalOpinion]) -> "AggregateSignalOpinion":
+        assert opinions
+        return cls(
+            tags={t for o in opinions for t in o.tags},
+            category=AggregateSignalOpinionCategory.from_opinion_categories(
+                o.category for o in opinions
+            ),
+        )
+
+
 @dataclass
 class FetchedSignalMetadata:
     """
@@ -96,15 +145,12 @@ class FetchedSignalMetadata:
         """
         return newer
 
+    def get_as_aggregate_opinion(self) -> AggregateSignalOpinion:
+        return AggregateSignalOpinion.from_opinions(self.get_as_opinions())
 
-@dataclass
-class FetchedSignalMetadataWithMerge(FetchedSignalMetadata):
-    """
-    Metadata that supports merging
-    """
-
-    def merge(self, newer: "FetchedSignalMetadataWithMerge") -> None:
-        raise NotImplementedError
+    def __str__(self) -> str:
+        agg = self.get_as_aggregate_opinion()
+        return f"{agg.category.name} {','.join(agg.tags)}"
 
 
 class FetchDeltaBase:

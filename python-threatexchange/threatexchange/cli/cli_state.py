@@ -18,6 +18,8 @@ import dataclasses
 import logging
 
 import dacite
+from build.lib.threatexchange.signal_type.index import SignalTypeIndex
+from build.lib.threatexchange.signal_type.signal_base import SignalType
 
 from threatexchange.cli.exceptions import CommandError
 from threatexchange.fetcher.collab_config import CollaborationConfigBase
@@ -140,6 +142,52 @@ class Dataset:
 #             return None
 #         with path.open("rb") as fin:
 #             return signal_type.get_index_cls().deserialize(fin)
+
+
+class CliIndexStore:
+
+    FILE_EXTENSION = ".index"
+
+    def __init__(self, indice_dir: pathlib.Path) -> None:
+        self.dir = indice_dir
+
+    def get_available(self) -> t.List[str]:
+        return [
+            str(f)[-len(self.FILE_EXTENSION)]
+            for f in self.dir.glob(f"*{self.FILE_EXTENSION}")
+        ]
+
+    def clear(self, only_types: t.Optional[t.List[t.Type[SignalType]]] = None) -> None:
+        only_names = None
+        if only_types is not None:
+            only_names = {st.get_name() for st in only_types}
+        for file in self.dir.glob(f"*{self.FILE_EXTENSION}"):
+            if (
+                only_names is None
+                or str(file)[: -len(self.FILE_EXTENSION)] in only_names
+            ):
+                logging.info("Removing index %s", file)
+                file.unlink()
+
+    def _index_file(self, signal_type: signal_base.SignalType) -> pathlib.Path:
+        return self.dir / f"{signal_type.get_name()}{self.FILE_EXTENSION}"
+
+    def store_index(
+        self, signal_type: signal_base.SignalType, index: SignalTypeIndex
+    ) -> None:
+        assert signal_type.get_index_cls() == index.__class__
+        path = self._index_file(signal_type)
+        with path.open("wb") as fout:
+            index.serialize(fout)
+
+    def load_index(
+        self, signal_type: signal_base.SignalType
+    ) -> t.Optional[index.SignalTypeIndex]:
+        path = self._index_file(signal_type)
+        if not path.exists():
+            return None
+        with path.open("rb") as fin:
+            return signal_type.get_index_cls().deserialize(fin)
 
 
 class CliSimpleState(simple_state.SimpleFetchedStateStore):

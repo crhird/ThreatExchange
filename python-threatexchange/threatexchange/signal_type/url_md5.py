@@ -12,6 +12,7 @@ from threatexchange.content_type.url import URLContent
 
 from threatexchange.signal_type import signal_base
 from threatexchange import common
+from threatexchange.signal_type.url import URLSignal
 
 
 class UrlMD5Signal(signal_base.SimpleSignalType, signal_base.TextHasher):
@@ -30,3 +31,7 @@ class UrlMD5Signal(signal_base.SimpleSignalType, signal_base.TextHasher):
         encoded_url = common.normalize_url(url)
         url_hash = hashlib.md5(encoded_url)
         return url_hash.hexdigest()
+
+    @staticmethod
+    def get_examples() -> t.List[str]:
+        return [UrlMD5Signal.hash_from_str(s) for s in URLSignal.get_examples()]

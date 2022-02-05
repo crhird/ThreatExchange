@@ -77,7 +77,9 @@ class _StateTracker:
     def merge(self, newer: SimpleFetchDelta) -> None:
         if not newer.updates:
             return
-        newer_by_type = defaultdict(list)
+        newer_by_type: t.DefaultDict[
+            str, t.List[t.Tuple[str, t.Optional[SimpleFetchedSignalMetadata]]]
+        ] = defaultdict(list)
         for (stype, signal_str), record in newer.updates.items():
             newer_by_type[stype].append((signal_str, record))
 
@@ -89,7 +91,7 @@ class _StateTracker:
                 else:
                     old_record = o_updates.get(sig_str)
                     if old_record:
-                        new_record = new_record.merge(old_record, new_record)
+                        new_record = new_record.merge_metadata(old_record, new_record)
                     o_updates[sig_str] = new_record
         self.checkpoint = newer.checkpoint
         self.dirty = True

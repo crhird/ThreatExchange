@@ -46,7 +46,7 @@ class TrendQuery:
         return False
 
 
-class TrendQuerySignal(signal_base.SignalType, signal_base.TextHasher):
+class TrendQuerySignal(signal_base.SignalType, signal_base.MatchesStr):
     """
     Trend Queries are a combination of and/or/not regexes.
 
