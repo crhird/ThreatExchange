@@ -74,11 +74,13 @@ class SignalType:
         raise NotImplementedError
 
     @classmethod
-    def validate_hash(cls, hash1: str) -> bool:
+    def validate_hash(cls, hash_: str) -> str:
         """
-        Returns true if this appears to be a serialized signal for this type
+        Return a normalized version a hash or throws an exception if malformed
         """
-        return True
+        if not hash_:
+            raise ValueError("empty hash")
+        return hash_.strip()
 
     @staticmethod
     def get_examples() -> t.List[str]:
@@ -180,7 +182,7 @@ class SimpleSignalType(SignalType):
 
 class TrivialSignalTypeIndex(index.SignalTypeIndex):
     """
-    Index that does only exact matches and serializes with pickle
+    Index that does only exact matches
     """
 
     def __init__(self) -> None:
@@ -211,7 +213,7 @@ class TrivialSignalTypeIndex(index.SignalTypeIndex):
         return pickle.load(fin)
 
 
-class TrivialLinearSearchIndex(index.SignalTypeIndex):
+class TrivialLinearSearchHashIndex(index.PickledSignalTypeIndex):
     """
     Index that does a linear search and serializes with pickle
 
@@ -232,18 +234,30 @@ class TrivialLinearSearchIndex(index.SignalTypeIndex):
                 ret.append(index.IndexMatch(res.distance, payload))
         return ret
 
-    def add(self, vals: t.Iterable[t.Tuple[str, index.T]]) -> None:
+    def add(self, vals: t.Iterable[t.Tuple[str, t.Any]]) -> None:
         self.state.extend(vals)
 
-    @classmethod
-    def build(cls, vals: t.Iterable[t.Tuple[str, index.T]]):
-        ret = cls()
-        ret.add(vals)
+
+class TrivialLinearSearchMatchIndex(index.PickledSignalTypeIndex):
+    """
+    Index that does a linear search and serializes with pickle
+
+    O(n) is the best n, clearly.
+    """
+
+    # You'll have to override with each usecase
+    _SIGNAL_TYPE: t.Type[MatchesStr]
+
+    def __init__(self) -> None:
+        self.state: t.List[(str, index.T)] = []
+
+    def query(self, query_hash: str) -> t.List[index.IndexMatch[index.T]]:
+        ret = []
+        for signal, payload in self.state:
+            res = self._SIGNAL_TYPE.matches_str(signal, query_hash)
+            if res.match:
+                ret.append(index.IndexMatch(res.distance, payload))
         return ret
 
-    def serialize(self, fout: t.BinaryIO):
-        pickle.dump(self, fout)
-
-    @classmethod
-    def deserialize(cls, fin: t.BinaryIO):
-        return pickle.load(fin)
+    def add(self, vals: t.Iterable[t.Tuple[str, t.Any]]) -> None:
+        self.state.extend(vals)

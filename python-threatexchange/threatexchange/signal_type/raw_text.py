@@ -18,7 +18,7 @@ from threatexchange.signal_type import signal_base
 from threatexchange.signal_type import index
 
 
-class RawTextSignal(signal_base.SimpleSignalType, signal_base.TextHasher):
+class RawTextSignal(signal_base.SimpleSignalType, signal_base.MatchesStr):
     """
     Raw text signal is the same as raw text content: the exact text content.
 
@@ -34,21 +34,20 @@ class RawTextSignal(signal_base.SimpleSignalType, signal_base.TextHasher):
         return [TextContent]
 
     @classmethod
-    def hash_from_str(cls, content: str) -> str:
-        """Get a string representation of the hash from a string"""
-        return common.normalize_string(content)
-
-    @classmethod
-    def compare_hash(cls, hash1: str, hash2: str) -> signal_base.HashComparisonResult:
+    def matches_str(
+        cls, signal: str, haystack: str
+    ) -> signal_base.HashComparisonResult:
+        a = common.normalize_string(signal)
+        b = common.normalize_string(haystack)
         # Match considered if 95% match
-        match_threshold = math.floor(len(hash1) * 0.05)
+        match_threshold = math.floor(len(a) * 0.05)
 
-        ldiff = abs(len(hash1) - len(hash2))
+        ldiff = abs(len(a) - len(b))
 
         if ldiff > match_threshold:
             return signal_base.HashComparisonResult.from_no_match()
 
-        distance = Levenshtein.distance(hash1, hash2)
+        distance = Levenshtein.distance(a, b)
         return signal_base.HashComparisonResult(distance <= match_threshold, distance)
 
     @classmethod
@@ -71,10 +70,5 @@ class RawTextSignal(signal_base.SimpleSignalType, signal_base.TextHasher):
         ]
 
 
-class LevenshteinLinearSearch(signal_base.TrivialLinearSearchIndex):
+class LevenshteinLinearSearch(signal_base.TrivialLinearSearchMatchIndex):
     _SIGNAL_TYPE = RawTextSignal
-
-    def add(self, vals: t.Iterable[t.Tuple[str, index.T]]) -> None:
-        # Raw text needs to be normalized somewhere - this is probably the
-        # wrong place (we should be sanitizing it before it comes in)
-        return super().add((common.normalize_string(s), v) for s, v in vals)

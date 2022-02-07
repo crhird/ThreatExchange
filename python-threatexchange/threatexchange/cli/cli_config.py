@@ -164,6 +164,11 @@ class CLISettings:
     def get_fetchers(self):
         return [fs for fs in self._mapping.fetcher.fetchers_by_name.values()]
 
+    def get_api_for_collab(
+        self, collab: collab_config.CollaborationConfigBase
+    ) -> SignalExchangeAPI:
+        return self._mapping.fetcher.fetchers_by_name[collab.name]
+
     def get_fetch_store_for_fetcher(
         self, fetcher: t.Type[SignalExchangeAPI]
     ) -> FetchedStateStoreBase:
@@ -184,6 +189,12 @@ class CLISettings:
             return [self._get_sample_collab()]
         # Should this check whether the APIs are all valid?
         return collabs
+
+    def get_collab(
+        self,
+        name: str,
+    ) -> t.Optional[collab_config.CollaborationConfigBase]:
+        return self._state.get_collab(name)
 
     def _get_sample_collab(self) -> collab_config.CollaborationConfigBase:
         if not self._sample_message_printed:

@@ -6,12 +6,13 @@ Match command for parsing simple data sources against the dataset.
 """
 
 import argparse
-import functools
 import logging
 import pathlib
 import sys
 import typing as t
-from build.lib.threatexchange.signal_type.signal_base import StrMatcher
+
+
+from threatexchange import common
 from threatexchange.fetcher.fetch_state import FetchedSignalMetadata
 
 from threatexchange.signal_type.index import IndexMatch, SignalTypeIndex
@@ -22,25 +23,6 @@ from threatexchange.content_type.content_base import ContentType
 
 from threatexchange.signal_type.signal_base import MatchesStr, TextHasher, FileHasher
 from threatexchange.cli import command_base
-
-
-def _choices_pre_type(choices: t.List[str], type: t.Callable[[str], t.Any]):
-    """
-    Argparse parses choices after type, which is sometimes undesirable.
-
-    So fix it with duct tape. type=_choices_pre_type()
-    """
-
-    def ret(s: str):
-        if s not in choices:
-            raise argparse.ArgumentTypeError(
-                "invalid choice: %s (choose from %s)",
-                s,
-                ", ".join(repr(c) for c in choices),
-            )
-        return type(s)
-
-    return ret
 
 
 class MatchCommand(command_base.Command):
@@ -74,7 +56,7 @@ class MatchCommand(command_base.Command):
 
         ap.add_argument(
             "content_type",
-            type=_choices_pre_type(
+            type=common.argparse_choices_pre_type(
                 [c.get_name() for c in settings.get_all_content_types()],
                 settings.get_content_type,
             ),
@@ -84,7 +66,7 @@ class MatchCommand(command_base.Command):
         ap.add_argument(
             "--only-signal",
             "-S",
-            type=_choices_pre_type(
+            type=common.argparse_choices_pre_type(
                 [s.get_name() for s in settings.get_all_signal_types()],
                 settings.get_signal_type,
             ),
@@ -195,7 +177,7 @@ class MatchCommand(command_base.Command):
 
         if self.inline:
             signal_types = [
-                s for s in signal_types if issubclass(s, (TextHasher, StrMatcher))
+                s for s in signal_types if issubclass(s, (TextHasher, MatchesStr))
             ]
         else:
             signal_types = [s for s in signal_types if issubclass(s, FileHasher)]
@@ -215,7 +197,7 @@ class MatchCommand(command_base.Command):
             if self.inline:
                 if issubclass(s_type, TextHasher):
                     query = lambda t: index.query(s_type.hash_from_str(t))
-                elif issubclass(s_type, StrMatcher):
+                elif issubclass(s_type, MatchesStr):
                     query = lambda t: index.query(t)
             else:
                 query = lambda f: index.query(s_type.hash_from_file(f))
