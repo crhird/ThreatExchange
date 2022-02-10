@@ -15,7 +15,7 @@ import typing as t
 from threatexchange import common
 from threatexchange.fetcher.fetch_state import FetchedSignalMetadata
 
-from threatexchange.signal_type.index import IndexMatch, SignalTypeIndex
+from threatexchange.signal_type.index import IndexMatch
 from threatexchange.cli.exceptions import CommandError
 from threatexchange.signal_type.signal_base import SignalType
 from threatexchange.cli.cli_config import CLISettings

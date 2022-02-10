@@ -5,7 +5,7 @@
 Settings used to inform a fetcher what to fetch
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import typing as t
 
 
@@ -23,9 +23,33 @@ class CollaborationConfigBase:
 
     name: str
     api: str  # Often a const for implementations
-    enabled: bool  # Whether to match this or not
-    only_signal_types: t.Set[str]  # Only fetch and index these types
-    not_signal_types: t.Set[str]  # Don't fetch and index these types
+    enabled: bool  # Whether to fetch/sync
+    # Only fetch and index these types
+    only_signal_types: t.Set[str]
+    # Don't fetch and index these types
+    not_signal_types: t.Set[str]
+    # Only use signals from these owners
+    only_owners: t.Set[int]
+    not_owners: t.Set[int]
+    # Only use signals with these tags
+    only_tags: t.Set[str]
+    not_tags: t.Set[str]
+
+
+@dataclass
+class DefaultsForCollabConfigBase:
+    enabled: bool = True
+    only_signal_types: t.Set[str] = field(default_factory=set)
+    not_signal_types: t.Set[str] = field(default_factory=set)
+    only_owners: t.Set[int] = field(default_factory=set)
+    not_owners: t.Set[int] = field(default_factory=set)
+    only_tags: t.Set[str] = field(default_factory=set)
+    not_tags: t.Set[str] = field(default_factory=set)
+
+
+@dataclass
+class SimpleCollabConfig(CollaborationConfigBase, DefaultsForCollabConfigBase):
+    """Fill out all the defaults in an MRO-friendly way"""
 
 
 class CollaborationConfigStoreBase:

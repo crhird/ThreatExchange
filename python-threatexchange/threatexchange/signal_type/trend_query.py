@@ -62,6 +62,13 @@ class TrendQuerySignal(signal_base.SignalType, signal_base.MatchesStr):
         return [TextContent]
 
     @classmethod
+    def validate_signal_str(cls, signal_str: str) -> str:
+        tq = TrendQuery(
+            json.loads(hash)
+        )  # TODO - does this throw all the right exceptions?
+        return signal_str
+
+    @classmethod
     def matches_str(cls, hash: str, haystack: str) -> signal_base.HashComparisonResult:
         tq = TrendQuery(json.loads(hash))
         return signal_base.HashComparisonResult.from_bool(tq.matches(haystack))
@@ -105,11 +112,7 @@ class TrendQueryIndex(index.PickledSignalTypeIndex[index.T]):
                 ret.extend(index.IndexMatch(0, v) for v in values)
         return ret
 
-    def add(self, entries: t.Iterable[t.Tuple[str, index.T]]) -> None:
-        for k, v in entries:
-            self.add_one(k, v)
-
-    def add_one(self, hash: str, value: index.T) -> None:
+    def add(self, hash: str, value: index.T) -> None:
         old_val = self.state.get(hash)
         query_json = json.loads(hash)
 

@@ -7,30 +7,39 @@ The fetcher is the component that talks to external APIs to get and put signals
 """
 
 
+import os
+import typing as t
 from dataclasses import dataclass
 from pathlib import Path
-
-from threatexchange.signal_type.pdq import PdqSignal
-from threatexchange.fetcher import fetch_state as state
-from threatexchange.fetcher.collab_config import CollaborationConfigBase
 from threatexchange.fetcher.simple.state import (
-    SimpleFetchDeltaWithSyntheticID,
+    SimpleFetchDelta,
 )
+
+from threatexchange.fetcher import fetch_state as state
+from threatexchange.fetcher.fetch_api import SignalExchangeAPI
+from threatexchange.fetcher.collab_config import (
+    CollaborationConfigBase,
+    DefaultsForCollabConfigBase,
+)
+from threatexchange.signal_type.signal_base import SignalType
 
 
 @dataclass
-class FileCollaborationConfig(CollaborationConfigBase):
+class FileCollaborationConfig(CollaborationConfigBase, DefaultsForCollabConfigBase):
     filename: str
-    signal_type: str
+    signal_type: t.Optional[str]
 
 
-class LocalFileSignalExchangeAPI:
+class LocalFileSignalExchangeAPI(SignalExchangeAPI):
     """
     Read simple signal files off the local disk.
     """
 
     def fetch_once(
-        self, collab: FileCollaborationConfig, _checkpoint: state.FetchCheckpointBase
+        self,
+        _supported_signal_types: t.List[t.Type[SignalType]],
+        collab: FileCollaborationConfig,
+        _checkpoint: t.Optional[state.FetchCheckpointBase],
     ) -> state.FetchDeltaBase:
         """Fetch the whole file"""
         path = Path(collab.filename)
@@ -41,6 +50,34 @@ class LocalFileSignalExchangeAPI:
         with path.open("r") as f:
             lines = f.readlines()
 
-        return SimpleFetchDeltaWithSyntheticID.from_simple_opinons(
-            PdqSignal, (line.trim() for line in lines)
-        )
+        updates = {}
+        for line in lines:
+            signal_type = collab.signal_type
+            signal = line.strip()
+            if signal_type is None:
+                signal_type, _, signal = signal.partition(" ")
+            if signal_type and signal:
+                updates[signal_type, signal] = state.FetchedSignalMetadata()
+
+        return SimpleFetchDelta(updates, state.FetchCheckpointBase(), done=True)
+
+
+    def report_opinion(
+        self,
+        collab: FileCollaborationConfig,
+        s_type: t.Type[SignalType],
+        signal: str,
+        opinion: state.SignalOpinion,
+    ) -> None:
+        if opinion.category != state.SignalOpinionCategory.TRUE_POSITIVE:
+            raise NotImplementedError
+        if opinion.tags:
+            raise NotImplementedError
+        path = Path(collab.filename)
+        with path.open("rb") as f:
+            f.seek(-1, os.SEEK_END)
+            has_newline = f.read1(1) == b"\n"
+        # Appending will overwrite previous ones, and compaction is for scrubs
+        with path.open("wa") as f:
+            f.write(f"{'' if has_newline else '\n'}{s_type.get_name()} {signal}\n")
+

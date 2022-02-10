@@ -58,12 +58,12 @@ class SignalTypeIndex(t.Generic[T]):
     The T can be whatever metadata might be useful, although be warned
     that not all T may serialize correctly.
 
-    # Why is `hash` str?
+    # Why is `signal_str` str?
     There are various multi-pass hashing approaches that may generate more
     complicated data structures, or require multiple query passes. It's
     unclear whether we should try and generalize those yet, and forcing the
     type to always be serializable in str gives us the advantage that
-    uploading it to ThreatExchange is always straightforward.
+    uploading it to SignalAPIs is always straightforward.
 
     # Handling Restricted Value Types
     In cases where your underlying index has limited type support for
@@ -87,7 +87,7 @@ class SignalTypeIndex(t.Generic[T]):
         internal_mapping[idx] = meta
     """
 
-    def query(self, hash: str) -> t.List[IndexMatch[T]]:
+    def query(self, query: str) -> t.List[IndexMatch[T]]:
         """
         Look up entries against the index, up to the max supported distance.
 
@@ -110,15 +110,21 @@ class SignalTypeIndex(t.Generic[T]):
         A later call to query(H1) should return both M1 and M2
         """
         ret = cls()
-        ret.add(entries)
+        ret.add_all(entries)
         return ret
 
-    def add(self, entries: t.Iterable[t.Tuple[str, T]]) -> None:
+    def add(self, signal_str: str, entry: T) -> None:
         """
-        Add entries to an existing index. May contain elements already in the
-        index.
+        Add an entry to the index.
+
+        Duplicate entries should not replace previous ones.
         """
         raise NotImplementedError
+
+    def add_all(self, entries: t.Iterable[t.Tuple[str, T]]) -> None:
+        """add, but more so"""
+        for signal_str, entry in entries:
+            self.add(signal_str, entry)
 
     def serialize(self, fout: t.BinaryIO) -> None:
         """

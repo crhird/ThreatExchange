@@ -140,11 +140,15 @@ class SignalExchangeAPI:
 
         Most implementations will want a full replacement specialization, but this
         allows a common interface for all uploads for the simplest usecases.
+
+        This is an optional API, and places that use it should catch
+        the NotImplementError.
         """
         raise NotImplementedError
 
     def report_true_positive(
         self,
+        collab: CollaborationConfigBase,
         s_type: t.Type[SignalType],
         signal: str,
         metadata: state.FetchedSignalMetadata,
@@ -155,13 +159,23 @@ class SignalExchangeAPI:
         This is an optional API, and places that use it should catch
         the NotImplementError.
         """
-        raise NotImplementedError
+        self.report_opinion(
+            collab,
+            s_type,
+            signal,
+            state.SignalOpinion(
+                owner=self.get_own_owner_id(),
+                category=state.SignalOpinionCategory.TRUE_POSITIVE,
+                tags=[],
+            ),
+        )
 
     def report_false_positive(
         self,
+        collab: CollaborationConfigBase,
         s_type: t.Type[SignalType],
         signal: str,
-        metadata: state.FetchedSignalMetadata,
+        _metadata: state.FetchedSignalMetadata,
     ) -> None:
         """
         Report that a previously seen signal is a false positive.
@@ -169,4 +183,13 @@ class SignalExchangeAPI:
         This is an optional API, and places that use it should catch
         the NotImplementError.
         """
-        raise NotImplementedError
+        self.report_opinion(
+            collab,
+            s_type,
+            signal,
+            state.SignalOpinion(
+                owner=self.get_own_owner_id(),
+                category=state.SignalOpinionCategory.FALSE_POSITIVE,
+                tags=[],
+            ),
+        )

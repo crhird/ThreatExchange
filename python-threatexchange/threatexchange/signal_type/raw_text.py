@@ -6,7 +6,6 @@ Wrapper around the raw text signal type.
 """
 
 import math
-import pathlib
 import typing as t
 
 import Levenshtein
@@ -72,3 +71,4 @@ class RawTextSignal(signal_base.SimpleSignalType, signal_base.MatchesStr):
 
 class LevenshteinLinearSearch(signal_base.TrivialLinearSearchMatchIndex):
     _SIGNAL_TYPE = RawTextSignal
+    # Could also convert these on ingestion

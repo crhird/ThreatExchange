@@ -74,13 +74,13 @@ class SignalType:
         raise NotImplementedError
 
     @classmethod
-    def validate_hash(cls, hash_: str) -> str:
+    def validate_signal_str(cls, signal_str: str) -> str:
         """
-        Return a normalized version a hash or throws an exception if malformed
+        Return a normalized version the signal or throws an exception if malformed
         """
-        if not hash_:
+        if not signal_str:
             raise ValueError("empty hash")
-        return hash_.strip()
+        return signal_str.strip()
 
     @staticmethod
     def get_examples() -> t.List[str]:
@@ -165,7 +165,14 @@ class SimpleSignalType(SignalType):
     TYPE_TAG: t.Optional[str] = None
 
     @classmethod
-    def indicator_applies(cls, indicator_type: str, tags: t.List[str]) -> bool:
+    def facebook_threatexchange_indicator_applies(
+        cls, indicator_type: str, tags: t.List[str]
+    ) -> bool:
+        """
+        A helper for Facebook ThreatExchange indicator conversion.
+
+        TODO: Consider moving to its own helper class.
+        """
         types = cls.INDICATOR_TYPE
         if isinstance(cls.INDICATOR_TYPE, str):
             types = (cls.INDICATOR_TYPE,)
@@ -180,47 +187,34 @@ class SimpleSignalType(SignalType):
         return HashComparisonResult.from_bool(hash1 == hash2)
 
 
-class TrivialSignalTypeIndex(index.SignalTypeIndex):
+class TrivialSignalTypeIndex(index.PickledSignalTypeIndex[index.T]):
     """
     Index that does only exact matches
     """
 
     def __init__(self) -> None:
-        self.state: t.Dict[str, t.List[t.Any]] = {}
+        self.state: t.Dict[str, t.List[index.T]] = {}
 
-    def query(self, hash: str) -> t.List[index.IndexMatch[index.T]]:
-        return [index.IndexMatch(0, meta) for meta in self.state.get(hash, [])]
+    def query(self, query: str) -> t.List[index.IndexMatch[index.T]]:
+        return [index.IndexMatch(0, meta) for meta in self.state.get(query, [])]
 
-    def add(self, vals: t.Iterable[t.Tuple[str, t.Any]]) -> None:
-        for k, val in vals:
-            l = self.state.get(k)
-            if not l:
-                l = []
-                self.state[k] = l
-            l.append(val)
-
-    @classmethod
-    def build(cls, vals: t.Iterable[t.Tuple[str, t.Any]]):
-        ret = cls()
-        ret.add(vals=vals)
-        return ret
-
-    def serialize(self, fout: t.BinaryIO):
-        pickle.dump(self, fout)
-
-    @classmethod
-    def deserialize(cls, fin: t.BinaryIO):
-        return pickle.load(fin)
+    def add(self, signal_str: str, entry: index.T) -> None:
+        l = self.state.get(signal_str)
+        if not l:
+            l = []
+            self.state[signal_str] = l
+        l.append(entry)
 
 
-class TrivialLinearSearchHashIndex(index.PickledSignalTypeIndex):
+class TrivialLinearSearchHashIndex(index.PickledSignalTypeIndex[index.T]):
     """
     Index that does a linear search and serializes with pickle
 
     O(n) is the best n, clearly.
     """
 
-    # You'll have to override with each usecase
+    # You'll have to override with each usecase, because I wasn't sure
+    # If pickle would behave expectedly here
     _SIGNAL_TYPE: t.Type[SignalType]
 
     def __init__(self) -> None:
@@ -234,22 +228,24 @@ class TrivialLinearSearchHashIndex(index.PickledSignalTypeIndex):
                 ret.append(index.IndexMatch(res.distance, payload))
         return ret
 
-    def add(self, vals: t.Iterable[t.Tuple[str, t.Any]]) -> None:
-        self.state.extend(vals)
+    def add(self, signal_str: str, entry: index.T) -> None:
+        self.state.append((signal_str, entry))
 
 
-class TrivialLinearSearchMatchIndex(index.PickledSignalTypeIndex):
+class TrivialLinearSearchMatchIndex(index.PickledSignalTypeIndex[index.T]):
     """
     Index that does a linear search and serializes with pickle
 
     O(n) is the best n, clearly.
     """
 
-    # You'll have to override with each usecase
+    # You'll have to override with each usecase, because I wasn't sure
+    # If pickle would behave expectedly here
     _SIGNAL_TYPE: t.Type[MatchesStr]
 
     def __init__(self) -> None:
         self.state: t.List[(str, index.T)] = []
+        assert issubclass(self._SIGNAL_TYPE, MatchesStr)
 
     def query(self, query_hash: str) -> t.List[index.IndexMatch[index.T]]:
         ret = []
@@ -259,5 +255,5 @@ class TrivialLinearSearchMatchIndex(index.PickledSignalTypeIndex):
                 ret.append(index.IndexMatch(res.distance, payload))
         return ret
 
-    def add(self, vals: t.Iterable[t.Tuple[str, t.Any]]) -> None:
-        self.state.extend(vals)
+    def add(self, signal_str: str, entry: index.T) -> None:
+        self.state.append((signal_str, entry))

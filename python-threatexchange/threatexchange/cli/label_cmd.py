@@ -42,7 +42,7 @@ class LabelCommand(command_base.Command):
         label_with = ap.add_mutually_exclusive_group()
         label_with.add_argument(
             "--tags",
-            type=set(lambda s: s.strip().split(",")),
+            type=lambda s: set(s.strip().split(",")),
             metavar="CSV",
             default=set(),
             help="tags to apply to item",
