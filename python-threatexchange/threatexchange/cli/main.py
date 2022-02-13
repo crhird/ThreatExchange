@@ -20,6 +20,7 @@ import sys
 import typing as t
 
 from threatexchange import meta
+from threatexchange.fetcher.simple.file_api import LocalFileSignalExchangeAPI
 
 from threatexchange.fetcher.simple.static_sample import StaticSampleSignalExchangeAPI
 
@@ -41,11 +42,13 @@ from threatexchange.cli import (
     dataset_cmd,
     hash_cmd,
     match_cmd,
+    config_cmd,
 )
 
 
 def get_subcommands() -> t.List[t.Type[base.Command]]:
     return [
+        config_cmd.ConfigCommand,
         fetch_cmd.FetchCommand,
         match_cmd.MatchCommand,
         label_cmd.LabelCommand,
@@ -138,6 +141,7 @@ def _get_settings():
     fetchers = meta.FetcherMapping(
         [
             StaticSampleSignalExchangeAPI(),
+            LocalFileSignalExchangeAPI(),
         ]
     )
     state = CliState(list(fetchers.fetchers_by_name.values()))

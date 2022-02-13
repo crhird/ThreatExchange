@@ -35,6 +35,10 @@ class LocalFileSignalExchangeAPI(SignalExchangeAPI):
     Read simple signal files off the local disk.
     """
 
+    @classmethod
+    def get_config_class(cls) -> CollaborationConfigBase:
+        return FileCollaborationConfig
+
     def fetch_once(
         self,
         _supported_signal_types: t.List[t.Type[SignalType]],
@@ -61,7 +65,6 @@ class LocalFileSignalExchangeAPI(SignalExchangeAPI):
 
         return SimpleFetchDelta(updates, state.FetchCheckpointBase(), done=True)
 
-
     def report_opinion(
         self,
         collab: FileCollaborationConfig,
@@ -79,5 +82,5 @@ class LocalFileSignalExchangeAPI(SignalExchangeAPI):
             has_newline = f.read1(1) == b"\n"
         # Appending will overwrite previous ones, and compaction is for scrubs
         with path.open("wa") as f:
-            f.write(f"{'' if has_newline else '\n'}{s_type.get_name()} {signal}\n")
-
+            nl = "" if has_newline else "\n"
+            f.write(f"{nl}{s_type.get_name()} {signal}\n")

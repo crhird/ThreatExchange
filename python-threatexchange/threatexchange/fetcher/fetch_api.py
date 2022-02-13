@@ -51,6 +51,8 @@ class SignalExchangeAPI:
         """
         A simple string name unique to SignalExchangeAPIs in use.
 
+        It should be one lowercase_with_underscores word.
+
         This shouldn't be changed once comitted, or you may break naive
         storage solutions (like the one in the CLI) which stores fetched
         data by (SignalExchangeAPI.name(), collab_name).

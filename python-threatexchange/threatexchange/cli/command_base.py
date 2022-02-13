@@ -9,10 +9,10 @@ to fill up.
 """
 
 import argparse
+import typing as t
 import sys
 
 from threatexchange import common
-from threatexchange import meta
 from threatexchange.cli.cli_config import CLISettings
 from threatexchange.cli.exceptions import CommandError
 
@@ -23,7 +23,9 @@ class Command:
     """
 
     @classmethod
-    def add_command_to_subparser(cls, settings: CLISettings, subparsers) -> None:
+    def add_command_to_subparser(
+        cls, settings: CLISettings, subparsers
+    ) -> argparse.ArgumentParser:
         """
         Shortcut for adding the command to the parser.
 
@@ -37,6 +39,7 @@ class Command:
         )
         command_ap.set_defaults(command_cls=cls)
         cls.init_argparse(settings, command_ap)
+        return command_ap
 
     @classmethod
     def init_argparse(
@@ -68,10 +71,10 @@ class Command:
         line = cls.get_description().strip().partition("\n")[0]
         # Good luck debugging this! Slightly reformat short description
         # (toplevel --help)
-        if line[0].isupper():
+        if line and line[0].isupper():
             first_word, sp, rem = line.partition(" ")
             line = f"{first_word.lower()}{sp}{rem}"
-        if line[-1] == ".":
+        if line and line[-1] == ".":
             line = line[:-1]
         return line
 
@@ -80,5 +83,22 @@ class Command:
         """Convenience accessor to stderr"""
         print(*args, file=sys.stderr, **kwargs)
 
-    def execute(self, settings: meta.FunctionalityMapping) -> None:
+    def execute(self, settings: CLISettings) -> None:
         raise NotImplementedError
+
+
+class CommandWithSubcommands(Command):
+    _SUBCOMMANDS: t.List[t.Type[Command]] = []
+
+    @classmethod
+    def add_command_to_subparser(cls, settings: CLISettings, subparsers) -> None:
+        command_ap = super().add_command_to_subparser(settings, subparsers)
+        sub_subparsers = command_ap.add_subparsers()
+
+        for command in cls._SUBCOMMANDS:
+            command.add_command_to_subparser(settings, sub_subparsers)
+
+        return command_ap
+
+    def execute(self, settings: CLISettings) -> None:
+        raise CommandError("subcommand is required", 2)

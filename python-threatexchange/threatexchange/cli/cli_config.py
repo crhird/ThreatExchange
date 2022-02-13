@@ -8,6 +8,7 @@ scalable service running on AWS. Instead, we have all of our state in
 a file (likely ~/.threatexchange)
 """
 
+import dataclasses
 import sys
 import typing as t
 import json
@@ -20,7 +21,7 @@ from threatexchange.content_type import content_base
 from threatexchange.fetcher.fetch_state import FetchedStateStoreBase
 from threatexchange.fetcher.simple.static_sample import StaticSampleSignalExchangeAPI
 from threatexchange.signal_type import signal_base
-from threatexchange.meta import FunctionalityMapping, SignalTypeMapping
+from threatexchange.meta import FunctionalityMapping
 from threatexchange.cli.cli_state import CliSimpleState, CliIndexStore
 
 
@@ -110,7 +111,7 @@ class CliState(collab_config.CollaborationConfigStoreBase):
                         continue
                     ctype = None
                     if content is dict:
-                        self._ctype_to_name.get(content.get("_type"))
+                        ctype = self._ctype_to_name.get(content.get("api"))
                     if ctype is None:
                         logging.warning("Ignoring collab config of unknown type: %s", f)
                         continue
@@ -121,8 +122,8 @@ class CliState(collab_config.CollaborationConfigStoreBase):
     def update_collab(self, collab: collab_config.CollaborationConfigBase) -> None:
         """Create or update a collaboration"""
         path = self.path_for_config(collab)
-        # with path.open("w") as fp:
-        #     json.dumps(collab.as_json())
+        with path.open("w") as fp:
+            json.dump(dataclasses.asdict(collab), fp)
 
     def delete_collab(self, collab: collab_config.CollaborationConfigBase) -> None:
         """Delete a collaboration"""
