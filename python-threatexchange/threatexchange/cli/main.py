@@ -23,6 +23,10 @@ from threatexchange import meta
 from threatexchange.fetcher.apis.file_api import LocalFileSignalExchangeAPI
 
 from threatexchange.fetcher.apis.static_sample import StaticSampleSignalExchangeAPI
+from threatexchange.fetcher.apis.fb_threatexchange_api import (
+    FBThreatExchangeSignalExchangeAPI,
+)
+from threatexchange.fetcher.apis.stop_ncii_api import StopNCIIAPI
 
 from threatexchange.content_type import photo, video, text, url
 from threatexchange.signal_type import (
@@ -110,22 +114,10 @@ def execute_command(settings: CLISettings, namespace) -> None:
         sys.exit(130)
 
 
-def _get_settings():
+def _get_settings() -> CLISettings:
     """
     Configure the behavior and functionality.
     """
-
-    # Init API
-    # api = ThreatExchangeAPI(
-    #     get_app_token(namespace.app_token),
-    #     endpoint_override=namespace.fb_threatexchange_endpoint,
-    # )
-    # Init state library (needs to be refactored)
-    # descriptor.ThreatDescriptor.MY_APP_ID = api.api_token.partition("|")[0]
-    # # Init collab config
-    # cfg = init_config_file(namespace.config)
-    # # "Init" dataset
-    # dataset = Dataset(cfg, namespace.state_dir)
 
     signals = meta.SignalTypeMapping(
         [photo.PhotoContent, video.VideoContent, url.URLContent, text.TextContent],
@@ -142,6 +134,8 @@ def _get_settings():
         [
             StaticSampleSignalExchangeAPI(),
             LocalFileSignalExchangeAPI(),
+            StopNCIIAPI(),
+            FBThreatExchangeSignalExchangeAPI(),
         ]
     )
     state = CliState(list(fetchers.fetchers_by_name.values()))

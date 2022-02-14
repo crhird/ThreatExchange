@@ -74,7 +74,7 @@ class SignalExchangeAPI:
         return state.FetchedSignalMetadata  # Default = no metadata
 
     @classmethod
-    def get_config_class(cls) -> CollaborationConfigBase:
+    def get_config_class(cls) -> t.Type[CollaborationConfigBase]:
         """Returns the dataclass used to store records for this API"""
         return CollaborationConfigBase
 
