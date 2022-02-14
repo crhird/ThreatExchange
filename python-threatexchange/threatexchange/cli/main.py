@@ -20,9 +20,9 @@ import sys
 import typing as t
 
 from threatexchange import meta
-from threatexchange.fetcher.simple.file_api import LocalFileSignalExchangeAPI
+from threatexchange.fetcher.apis.file_api import LocalFileSignalExchangeAPI
 
-from threatexchange.fetcher.simple.static_sample import StaticSampleSignalExchangeAPI
+from threatexchange.fetcher.apis.static_sample import StaticSampleSignalExchangeAPI
 
 from threatexchange.content_type import photo, video, text, url
 from threatexchange.signal_type import (

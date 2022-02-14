@@ -15,9 +15,8 @@ from threatexchange.cli.cli_config import CLISettings
 
 from threatexchange.cli import command_base
 from threatexchange.cli.exceptions import CommandError
-from threatexchange.fetcher.collab_config import CollaborationConfigBase
 from threatexchange.fetcher.fetch_api import SignalExchangeAPI
-from threatexchange.fetcher.simple.static_sample import StaticSampleSignalExchangeAPI
+from threatexchange.fetcher.apis.static_sample import StaticSampleSignalExchangeAPI
 from threatexchange.signal_type.signal_base import SignalType
 
 
@@ -162,7 +161,6 @@ class _UpdateCollabCommand(command_base.Command):
             return
         if field.name in cls._IGNORE_FIELDS:
             return
-        print(field)
         assert not isinstance(
             field.type, t.ForwardRef
         ), "rework class to not have forward ref"
@@ -244,7 +242,7 @@ class ConfigCollabForAPICommand(command_base.CommandWithSubcommands):
         cls._SUBCOMMANDS = [
             cls._create_command_for_api(api)
             for api in apis
-            # if api.__class__ is not StaticSampleSignalExchangeAPI
+            if api.__class__ is not StaticSampleSignalExchangeAPI
         ]
 
     @classmethod
